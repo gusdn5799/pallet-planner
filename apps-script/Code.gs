@@ -35,19 +35,30 @@ function doPost(e) {
       // 1) 이전 이미지 전부 삭제
       sh.getImages().forEach(function (img) { img.remove(); });
 
-      // 2) 칸 크기를 A4에 맞춤: A열 = A4 폭, 쪽마다 한 행 = A4 높이
-      sh.setColumnWidth(1, PAGE_W);
+      // 2) 칸 크기를 A4에 맞춤: A열 = A4 폭, 한 쪽 = A4 높이
+      //    시트 이미지 제한(1장 최대 100만 픽셀) 때문에 플래너가 한 쪽을 tilesPerPage장(위→아래)으로 나눠 보냄
+      const per = Math.max(1, Number(body.tilesPerPage) || 1);
       const n = body.pages.length;
+      const pages = Math.ceil(n / per);
+      sh.setColumnWidth(1, PAGE_W);
       if (sh.getMaxRows() < n) sh.insertRowsAfter(sh.getMaxRows(), n - sh.getMaxRows());
-      for (let i = 0; i < n; i++) sh.setRowHeight(i + 1, PAGE_H);
+      const tileH = [];
+      for (let i = 0; i < n; i++) {
+        const k = i % per;                                   // 쪽 안에서 몇 번째 조각인지
+        const h = Math.round(PAGE_H * (k + 1) / per) - Math.round(PAGE_H * k / per);
+        tileH.push(h);
+        sh.setRowHeight(i + 1, h);
+      }
+      // 이전에 더 많은 쪽을 올렸던 경우 남은 행 높이를 원래대로 (빈 쪽 인쇄 방지)
+      if (sh.getMaxRows() > n) sh.setRowHeights(n + 1, sh.getMaxRows() - n, 21);
 
-      // 3) 새 이미지 등록 (A1, A2, … 에 한 쪽씩)
+      // 3) 새 이미지 등록 (A1, A2, … 에 조각 하나씩)
       body.pages.forEach(function (dataUrl, i) {
         const m = String(dataUrl).match(/^data:(image\/(?:png|jpeg));base64,(.+)$/);
-        if (!m) throw new Error((i + 1) + '쪽 이미지 형식이 올바르지 않습니다');
+        if (!m) throw new Error((i + 1) + '번째 이미지 형식이 올바르지 않습니다');
         const blob = Utilities.newBlob(Utilities.base64Decode(m[2]), m[1], 'pallet-' + (i + 1));
         const img = sh.insertImage(blob, 1, i + 1);
-        img.setWidth(PAGE_W).setHeight(PAGE_H);
+        img.setWidth(PAGE_W).setHeight(tileH[i]);
       });
       sh.getRange('A1').setNote('플래너에서 등록: ' + Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm'));
       SpreadsheetApp.flush();
@@ -57,7 +68,7 @@ function doPost(e) {
         + '&gid=' + gid + '&size=A4&portrait=true&fitw=true&gridlines=false&printtitle=false'
         + '&sheetnames=false&pagenum=UNDEFINED&horizontal_alignment=CENTER'
         + '&top_margin=0.2&bottom_margin=0.2&left_margin=0.2&right_margin=0.2';
-      return json_({ ok: true, pages: n, sheetUrl: ss.getUrl() + '#gid=' + gid, pdfUrl: pdfUrl });
+      return json_({ ok: true, pages: pages, sheetUrl: ss.getUrl() + '#gid=' + gid, pdfUrl: pdfUrl });
     } finally {
       lock.releaseLock();
     }

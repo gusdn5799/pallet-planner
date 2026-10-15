@@ -786,15 +786,16 @@ $('#gsSave').addEventListener('click',()=>{const url=$('#gsUrl').value.trim(),ke
   gsSaveCfg({url,key});gsRender()});
 $('#gsClear').addEventListener('click',()=>{gsSaveCfg({});gsRender()});
 gsRender();
-// A4 세로(150dpi 1240×1754), 파레트 4장씩 한 쪽
-const A4W=1240,A4H=1754;
+// A4 세로(약 143dpi 1180×1668), 파레트 4장씩 한 쪽
+// 구글시트 이미지 제한(1장 최대 100만 픽셀·2MB) 때문에 한 쪽을 위/아래 두 장으로 나눠 보냄 (각 1180×834)
+const A4W=1180,A4H=1668;
 function a4Pages(){
   const out=[],per=4,n=Math.ceil(result.pallets.length/per);
   for(let i=0;i<n;i++){
     const src=sheetCanvas(result.pallets.slice(i*per,i*per+per),n>1?`${i+1}/${n}쪽`:'',{cols:1,bh:30});
     const cv=document.createElement('canvas');cv.width=A4W;cv.height=A4H;const g=cv.getContext('2d');
     g.fillStyle='#ffffff';g.fillRect(0,0,A4W,A4H);
-    const M=60,sc=Math.min((A4W-2*M)/src.width,(A4H-2*M)/src.height);
+    const M=40,sc=Math.min((A4W-2*M)/src.width,(A4H-2*M)/src.height);
     g.imageSmoothingQuality='high';g.drawImage(src,(A4W-src.width*sc)/2,M,src.width*sc,src.height*sc);
     out.push(cv);
   }
@@ -802,8 +803,11 @@ function a4Pages(){
 }
 async function sendToSheet(){
   const c=gsLoad();if(!c.url)return{skip:true};
-  const pages=a4Pages().map(cv=>{let d=cv.toDataURL('image/png');if(d.length>2.6e6)d=cv.toDataURL('image/jpeg',0.9);return d});
-  const res=await fetch(c.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:c.key||'',pages})});
+  const tiles=[];
+  a4Pages().forEach(cv=>{for(let k=0;k<2;k++){const t=document.createElement('canvas');t.width=A4W;t.height=A4H/2;
+    t.getContext('2d').drawImage(cv,0,k*A4H/2,A4W,A4H/2,0,0,A4W,A4H/2);
+    let d=t.toDataURL('image/png');if(d.length>2.6e6)d=t.toDataURL('image/jpeg',0.9);tiles.push(d)}});
+  const res=await fetch(c.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:c.key||'',pages:tiles,tilesPerPage:2})});
   return await res.json();
 }
 $('#copyBtn').addEventListener('click',async()=>{
