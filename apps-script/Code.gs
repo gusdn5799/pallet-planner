@@ -12,7 +12,7 @@ const SHEET_NAME = '파랫트 적재';
 const PAGE_W = 794;
 const PAGE_H = 1123;
 
-/** 처음 한 번 실행: 비밀키를 만들어 저장하고 실행 로그에 보여줍니다. */
+/** (선택) 비밀키를 쓰려면 한 번 실행. 사내용으로 키 없이 쓸 때는 실행하지 않아도 됩니다. */
 function setup() {
   const key = Utilities.getUuid().replace(/-/g, '');
   PropertiesService.getScriptProperties().setProperty('TOKEN', key);
@@ -23,7 +23,7 @@ function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
     const token = PropertiesService.getScriptProperties().getProperty('TOKEN');
-    if (!token || body.token !== token) return json_({ ok: false, error: '비밀키가 맞지 않습니다' });
+    if (token && body.token !== token) return json_({ ok: false, error: '비밀키가 맞지 않습니다' });
     if (!Array.isArray(body.pages) || !body.pages.length) return json_({ ok: false, error: '이미지가 없습니다' });
 
     const lock = LockService.getScriptLock();

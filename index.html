@@ -282,10 +282,10 @@ button.chip[aria-pressed="true"]{border-color:var(--ink);font-weight:700}
       <p class="sheet-note">파레트마다 앞면·뒷면에서 본 모습입니다. 아래부터 위로 쌓고, 흰 줄은 간지 위치입니다. “전체 지시서 이미지 복사”는 전체 파레트를 한 장의 이미지로 클립보드에 복사하고, 시트 연동이 설정돼 있으면 구글시트 ‘파랫트 적재’ 시트에 A4(파레트 4장씩)로 등록합니다.</p>
       <div class="gs-links" id="gsLinks" hidden></div>
       <details class="gs" id="gsBox">
-        <summary>구글시트 연동 설정 <span id="gsState" class="copy-msg"></span></summary>
-        <p class="sheet-note" style="margin:8px 0">Apps Script 웹앱 주소와 비밀키를 넣으세요. 이 PC의 브라우저에만 저장됩니다. 설치 방법은 GitHub 레포의 README를 참고하세요.</p>
+        <summary>구글시트 연동 <span id="gsState" class="copy-msg"></span></summary>
+        <p class="sheet-note" style="margin:8px 0">기본 주소가 코드에 들어 있어 따로 설정할 필요가 없습니다. 다른 시트로 보내야 할 때만 이 PC용 주소를 입력하세요.</p>
         <div class="gs-row"><label for="gsUrl">웹앱 주소</label><input id="gsUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off"></div>
-        <div class="gs-row"><label for="gsKey">비밀키</label><input id="gsKey" type="password" placeholder="setup 실행 시 나온 키" autocomplete="off"></div>
+        <div class="gs-row"><label for="gsKey">비밀키</label><input id="gsKey" type="password" placeholder="(선택) 비밀키를 설정한 경우만" autocomplete="off"></div>
         <div class="gs-row"><span></span><div style="display:flex;gap:6px;flex-wrap:wrap"><button id="gsSave">저장</button><button id="gsClear" class="ghost">지우기</button></div></div>
       </details>
       <div id="sheet"></div>
@@ -774,10 +774,13 @@ function sheetCanvas(list,page,opt){opt=opt||{};
   return cv;
 }
 /* ---------- 구글시트 연동 ---------- */
+// 사내용: 웹앱 주소를 코드에 고정. 배포 후 받은 …/exec 주소를 여기에 넣으면 모든 PC에서 바로 동작
+const GS_URL='';
+const GS_TOKEN='';
 const GSKEY=KEY+'-gs';
-function gsLoad(){try{return JSON.parse(localStorage.getItem(GSKEY))||{}}catch(e){return{}}}
+function gsLoad(){let c={};try{c=JSON.parse(localStorage.getItem(GSKEY))||{}}catch(e){}return c.url?c:{url:GS_URL,key:GS_TOKEN}}
 function gsSaveCfg(c){try{localStorage.setItem(GSKEY,JSON.stringify(c))}catch(e){}}
-function gsRender(){const c=gsLoad();$('#gsUrl').value=c.url||'';$('#gsKey').value=c.key||'';$('#gsState').textContent=c.url&&c.key?'· 연결됨':'· 미설정'}
+function gsRender(){const c=gsLoad();$('#gsUrl').value=c.url||'';$('#gsKey').value=c.key||'';$('#gsState').textContent=c.url?(c.url===GS_URL?'· 연결됨 (기본 설정)':'· 연결됨 (이 PC 설정)'):'· 미설정'}
 $('#gsSave').addEventListener('click',()=>{const url=$('#gsUrl').value.trim(),key=$('#gsKey').value.trim();
   if(url&&!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(url)){$('#gsState').textContent='· 주소 형식 확인 (…/exec 로 끝나야 함)';return}
   gsSaveCfg({url,key});gsRender()});
@@ -798,9 +801,9 @@ function a4Pages(){
   return out;
 }
 async function sendToSheet(){
-  const c=gsLoad();if(!c.url||!c.key)return{skip:true};
+  const c=gsLoad();if(!c.url)return{skip:true};
   const pages=a4Pages().map(cv=>{let d=cv.toDataURL('image/png');if(d.length>2.6e6)d=cv.toDataURL('image/jpeg',0.9);return d});
-  const res=await fetch(c.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:c.key,pages})});
+  const res=await fetch(c.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:c.key||'',pages})});
   return await res.json();
 }
 $('#copyBtn').addEventListener('click',async()=>{
@@ -816,7 +819,7 @@ $('#copyBtn').addEventListener('click',async()=>{
   if(!copied){$('#shotImg').src=cv.toDataURL('image/png');$('#shot').hidden=false}
   // 2) 구글시트 '파랫트 적재' 시트에 A4로 등록 (기존 이미지 삭제 후)
   const c=gsLoad();
-  if(!c.url||!c.key){msg.textContent=cmsg+' · 시트 연동은 미설정';return}
+  if(!c.url){msg.textContent=cmsg+' · 시트 연동은 미설정';return}
   msg.textContent=cmsg+' · 시트에 등록 중…';
   try{
     const r=await sendToSheet();
