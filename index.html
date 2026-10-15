@@ -786,16 +786,16 @@ $('#gsSave').addEventListener('click',()=>{const url=$('#gsUrl').value.trim(),ke
   gsSaveCfg({url,key});gsRender()});
 $('#gsClear').addEventListener('click',()=>{gsSaveCfg({});gsRender()});
 gsRender();
-// A4 가로(약 143dpi 1668×1158, 시트의 1123×780 칸과 같은 비율), 파레트 4장씩(2×2) 한 쪽
-// 구글시트 이미지 제한(1장 최대 100만 픽셀·2MB) 때문에 한 쪽을 위/아래 두 장으로 나눠 보냄 (각 1668×579)
-const A4W=1668,A4H=1158;
+// A4 가로 한 쪽 = 이미지 1장 (1200×833, 시트의 1123×780 칸과 같은 비율), 파레트 4장씩(2×2)
+// 구글시트 이미지 제한(1장 최대 100만 픽셀·2MB) 안에 들어가도록 크기를 맞춤. 조각으로 나누면 시트에서 일부가 안 보이는 문제가 있어 1장으로 보냄
+const A4W=1200,A4H=833;
 function a4Pages(){
   const out=[],per=4,n=Math.ceil(result.pallets.length/per);
   for(let i=0;i<n;i++){
     const src=sheetCanvas(result.pallets.slice(i*per,i*per+per),n>1?`${i+1}/${n}쪽`:'',{cols:2,bh:34,w:1150});
     const cv=document.createElement('canvas');cv.width=A4W;cv.height=A4H;const g=cv.getContext('2d');
     g.fillStyle='#ffffff';g.fillRect(0,0,A4W,A4H);
-    const M=40,sc=Math.min((A4W-2*M)/src.width,(A4H-2*M)/src.height);
+    const M=24,sc=Math.min((A4W-2*M)/src.width,(A4H-2*M)/src.height);
     g.imageSmoothingQuality='high';g.drawImage(src,(A4W-src.width*sc)/2,M,src.width*sc,src.height*sc);
     out.push(cv);
   }
@@ -803,11 +803,8 @@ function a4Pages(){
 }
 async function sendToSheet(){
   const c=gsLoad();if(!c.url)return{skip:true};
-  const tiles=[];
-  a4Pages().forEach(cv=>{for(let k=0;k<2;k++){const t=document.createElement('canvas');t.width=A4W;t.height=A4H/2;
-    t.getContext('2d').drawImage(cv,0,k*A4H/2,A4W,A4H/2,0,0,A4W,A4H/2);
-    let d=t.toDataURL('image/png');if(d.length>2.6e6)d=t.toDataURL('image/jpeg',0.9);tiles.push(d)}});
-  const res=await fetch(c.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:c.key||'',pages:tiles,tilesPerPage:2})});
+  const pages=a4Pages().map(cv=>{let d=cv.toDataURL('image/png');if(d.length>2.6e6)d=cv.toDataURL('image/jpeg',0.92);return d});
+  const res=await fetch(c.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:c.key||'',pages,tilesPerPage:1})});
   return await res.json();
 }
 $('#copyBtn').addEventListener('click',async()=>{
