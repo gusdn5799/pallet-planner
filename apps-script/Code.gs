@@ -60,7 +60,8 @@ function doPost(e) {
         const img = sh.insertImage(blob, 1, i + 1);
         img.setWidth(PAGE_W).setHeight(tileH[i]);
       });
-      sh.getRange('A1').setNote('플래너에서 등록: ' + Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm'));
+      // 메모는 PDF 인쇄 때 별도 페이지로 붙으므로 남기지 않음 (예전 버전이 남긴 메모도 지움)
+      sh.getRange(1, 1, sh.getMaxRows(), 1).clearNote();
       SpreadsheetApp.flush();
 
       const gid = sh.getSheetId();
