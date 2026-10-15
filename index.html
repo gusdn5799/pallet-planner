@@ -152,10 +152,10 @@ button.chip[aria-pressed="true"]{border-color:var(--ink);font-weight:700}
 .bx{height:24px;border-radius:3px;display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--f-mono);font-weight:600;font-size:13px;text-shadow:0 1px 1px rgba(0,0,0,.35)}
 .sg{border-radius:3px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;color:#fff;text-align:center;padding:0 4px;min-width:0;overflow:hidden;text-shadow:0 1px 1px rgba(0,0,0,.4);
   background-image:repeating-linear-gradient(to top,transparent 0 24px,rgba(0,0,0,.25) 24px 26px)}
-.sg .sn{font-size:12px;font-weight:700;line-height:1.25;max-width:100%;overflow:hidden;word-break:keep-all;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.sg .sn{font-size:14px;font-weight:700;line-height:1.25;max-width:100%;overflow:hidden;word-break:keep-all;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .sg.q1{flex-direction:row;gap:4px}
-.sg.q1 .sn{-webkit-line-clamp:1;font-size:11px}
-.sg .sq{font-family:var(--f-mono);font-size:11px;font-weight:600;opacity:.95}
+.sg.q1 .sn{-webkit-line-clamp:1;font-size:12px}
+.sg .sq{font-size:13px;font-weight:800;opacity:.95}
 .sg.gj{box-shadow:inset 0 -5px 0 #ffffff,inset 0 -6px 0 rgba(0,0,0,.45)}
 .dot{width:10px;height:10px;border-radius:999px;background:var(--c);flex:none;margin-left:5px}
 .shot{position:fixed;inset:0;z-index:20;background:rgba(10,14,18,.72);display:flex;align-items:center;justify-content:center;
@@ -704,6 +704,8 @@ function wrap2(g,t,w){ // 띄어쓰기 기준 최대 2줄
 }
 function fitText(g,t,w){if(g.measureText(t).width<=w)return t;while(t.length&&g.measureText(t+'…').width>w)t=t.slice(0,-1);return t+'…'}
 function sheetCanvas(list,page,opt){opt=opt||{};
+  // FS: 박스 안 글자 배율 (인쇄용 A4는 1.5 → 품목명 약 12pt), LS: 탑 번호·품목 목록 글자 배율
+  const FS=opt.fs||1.25,LS=Math.min(FS,1.3);
   const pals=list||result.pallets,P=result.pallets.length;
   const FONT='"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif',MONO='"IBM Plex Mono",monospace';
   const W=opt.w||1000,PAD=24,GAP=16,COLS=opt.cols||(P>1?2:1),CW=(W-PAD*2-GAP*(COLS-1))/COLS;
@@ -713,10 +715,10 @@ function sheetCanvas(list,page,opt){opt=opt||{};
   const cards=pals.map(p=>{
     const sum={};p.cols.forEach(x=>x.stack.forEach(sg=>sum[sg.code]=(sum[sg.code]||0)+sg.qty));
     const its=result.skus.filter(s=>sum[s.code]).map(s=>({s,t:`${s.name} ×${sum[s.code]}`}));
-    meas.font=`500 13px ${FONT}`;
+    meas.font=`500 ${13*LS}px ${FONT}`;
     const lines=[[]];let lw=0;const maxW=CW-32;
-    its.forEach(x=>{const w=Math.min(maxW,meas.measureText(x.t).width+30);if(lw+w>maxW&&lines[lines.length-1].length){lines.push([]);lw=0}lines[lines.length-1].push({...x,w});lw+=w+6});
-    const h=16+30+20+TH+22+10+lines.length*28+14;
+    its.forEach(x=>{const w=Math.min(maxW,meas.measureText(x.t).width+30*LS);if(lw+w>maxW&&lines[lines.length-1].length){lines.push([]);lw=0}lines[lines.length-1].push({...x,w});lw+=w+6});
+    const h=16+30+20+TH+22*LS+10+lines.length*28*LS+14;
     return{p,lines,h};
   });
   const rows=[];for(let i=0;i<cards.length;i+=COLS)rows.push(cards.slice(i,i+COLS));
@@ -750,24 +752,27 @@ function sheetCanvas(list,page,opt){opt=opt||{};
             g.strokeStyle='rgba(0,0,0,.25)';g.lineWidth=2;for(let n=1;n<sg.qty;n++){const ly=by-n*(BH+BG)+1;g.beginPath();g.moveTo(tx,ly);g.lineTo(tx+TW,ly);g.stroke()}
             if(si>0){g.fillStyle='#ffffff';g.fillRect(tx,by-5,TW,5);g.fillStyle='rgba(0,0,0,.45)';g.fillRect(tx,by-6,TW,1)}
             g.fillStyle='#ffffff';g.textAlign='center';g.shadowColor='rgba(0,0,0,.4)';g.shadowBlur=2;
-            if(sg.qty>1){
-              g.font=`700 12px ${FONT}`;const ls=wrap2(g,it.name,TW-8),y0=top+h/2-(ls.length-1)*8-3;
-              ls.forEach((l,i)=>g.fillText(l,tx+TW/2,y0+i*16));
-              g.font=`600 11px ${MONO}`;g.fillText(`×${sg.qty}`,tx+TW/2,y0+(ls.length-1)*16+15);
-            }else{g.font=`700 11px ${FONT}`;g.fillText(fitText(g,`${it.name} ×1`,TW-6),tx+TW/2,top+h/2+4)}
+            {const NF=12*FS,QF=11*FS,LH=NF*1.25,QH=QF*1.25;
+              g.font=`700 ${NF}px ${FONT}`;
+              // 칸 높이에 맞춰: 품목명 2줄+수량 → 품목명 1줄+수량 → 한 줄(품목명 ×N)
+              let ls=wrap2(g,it.name,TW-8);if(ls.length>1&&h<2*LH+QH+4)ls=[fitText(g,it.name,TW-8)];
+              if(h>=LH+QH+2){const y0=top+(h-(ls.length*LH+QH))/2+NF*0.95;
+                ls.forEach((l,i)=>g.fillText(l,tx+TW/2,y0+i*LH));
+                g.font=`800 ${QF}px ${FONT}`;g.fillText(`×${sg.qty}`,tx+TW/2,y0+(ls.length-1)*LH+QH+1);
+              }else{g.font=`700 ${QF}px ${FONT}`;g.fillText(fitText(g,`${it.name} ×${sg.qty}`,TW-6),tx+TW/2,top+h/2+QF*0.36)}}
             g.shadowBlur=0;g.textAlign='left';
             by=top-BG;
           });
           for(let k2=c.fill;k2<HM;k2++){const top=by-BH;g.strokeStyle='#d3d9df';g.lineWidth=1;g.setLineDash([4,3]);rr(g,tx+.5,top+.5,TW-1,BH-1,3);g.stroke();g.setLineDash([]);by=top-BG}
-          g.fillStyle='#5b6672';g.font=`500 12px ${MONO}`;g.textAlign='center';g.fillText(`${POSNUM[k]} ${c.fill}단`,tx+TW/2,ty+TH+16);g.textAlign='left';
+          g.fillStyle='#1a2028';g.font=`600 ${12*LS}px ${FONT}`;g.textAlign='center';g.fillText(`${POSNUM[k]} ${c.fill}단`,tx+TW/2,ty+TH+16*LS);g.textAlign='left';
         });
-        g.fillStyle='#c39a66';rr(g,fx,ty+TH+22,FW,7,2);g.fill();
+        g.fillStyle='#c39a66';rr(g,fx,ty+TH+22*LS,FW,7,2);g.fill();
       });
-      let ly=ty+TH+22+10+8;
+      let ly=ty+TH+22*LS+10+8;const CH=23*LS;
       cd.lines.forEach(line=>{let lx=x+16;line.forEach(it=>{
-        g.fillStyle='#f6f7f9';g.strokeStyle='#d3d9df';rr(g,lx+.5,ly+.5,it.w-1,23,11.5);g.fill();g.stroke();
-        g.fillStyle=it.s.color;g.beginPath();g.arc(lx+12,ly+12,5,0,Math.PI*2);g.fill();
-        g.fillStyle='#1a2028';g.font=`500 13px ${FONT}`;g.fillText(fitText(g,it.t,it.w-30),lx+22,ly+16);lx+=it.w+6});ly+=28});
+        g.fillStyle='#f6f7f9';g.strokeStyle='#d3d9df';rr(g,lx+.5,ly+.5,it.w-1,CH,CH/2);g.fill();g.stroke();
+        g.fillStyle=it.s.color;g.beginPath();g.arc(lx+12*LS,ly+CH/2,5*LS,0,Math.PI*2);g.fill();
+        g.fillStyle='#1a2028';g.font=`500 ${13*LS}px ${FONT}`;g.fillText(fitText(g,it.t,it.w-30*LS),lx+22*LS,ly+CH/2+13*LS*0.36);lx+=it.w+6});ly+=28*LS});
     });
     y+=rh+GAP;
   });
@@ -792,7 +797,9 @@ const A4W=1200,A4H=833;
 function a4Pages(){
   const out=[],per=4,n=Math.ceil(result.pallets.length/per);
   for(let i=0;i<n;i++){
-    const src=sheetCanvas(result.pallets.slice(i*per,i*per+per),n>1?`${i+1}/${n}쪽`:'',{cols:2,bh:34,w:1150});
+    const sl=result.pallets.slice(i*per,i*per+per),hm=Math.max(5,...sl.map(p=>p.h||0));
+    // 6~7층이면 칸 높이를 줄여 A4 가로를 꽉 채움 (글자 크기는 유지)
+    const src=sheetCanvas(sl,n>1?`${i+1}/${n}쪽`:'',{cols:2,bh:hm>=7?27:hm>=6?31:36,w:1150,fs:1.5});
     const cv=document.createElement('canvas');cv.width=A4W;cv.height=A4H;const g=cv.getContext('2d');
     g.fillStyle='#ffffff';g.fillRect(0,0,A4W,A4H);
     const M=24,sc=Math.min((A4W-2*M)/src.width,(A4H-2*M)/src.height);
