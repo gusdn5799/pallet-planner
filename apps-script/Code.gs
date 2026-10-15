@@ -8,6 +8,7 @@
  */
 
 const SHEET_NAME = '파랫트 적재';
+const LIST_SHEET = '쿠팡 적재리스트';   // 파레트별 쿠팡 적재리스트 양식을 쓰는 시트 (없으면 새로 만듦)
 // A4 가로를 96dpi 화면 기준 픽셀로 (297×210mm, 인쇄 여백만큼 높이를 조금 줄임)
 const PAGE_W = 1123;
 const PAGE_H = 780;
@@ -64,18 +65,74 @@ function doPost(e) {
       sh.getRange(1, 1, sh.getMaxRows(), 1).clearNote();
       SpreadsheetApp.flush();
 
+      // 4) 쿠팡 적재리스트 양식 (파레트별 칸)
+      let listUrl = '';
+      if (Array.isArray(body.list) && body.list.length) {
+        const ls = writeCoupangList_(ss, body.list);
+        listUrl = ss.getUrl() + '#gid=' + ls.getSheetId();
+      }
+
       const gid = sh.getSheetId();
       const pdfUrl = 'https://docs.google.com/spreadsheets/d/' + ss.getId() + '/export?format=pdf'
         + '&gid=' + gid + '&size=A4&portrait=false&fitw=true&gridlines=false&printtitle=false'
         + '&sheetnames=false&pagenum=UNDEFINED&horizontal_alignment=CENTER'
         + '&top_margin=0.15&bottom_margin=0.15&left_margin=0.15&right_margin=0.15';
-      return json_({ ok: true, pages: pages, sheetUrl: ss.getUrl() + '#gid=' + gid, pdfUrl: pdfUrl });
+      return json_({ ok: true, pages: pages, sheetUrl: ss.getUrl() + '#gid=' + gid, pdfUrl: pdfUrl, listUrl: listUrl });
     } finally {
       lock.releaseLock();
     }
   } catch (err) {
     return json_({ ok: false, error: String(err && err.message || err) });
   }
+}
+
+/**
+ * 쿠팡 파렛트 적재리스트 양식을 파레트마다 하나씩 아래로 이어서 작성.
+ * 채우는 칸: 박스수량( 00 BOX ), SKU NAME, BOX 수량. 나머지는 양식 그대로(빈칸).
+ * list = [{ total: 20, items: [{ name: '…', box: 3 }, …] }, …]
+ */
+function writeCoupangList_(ss, list) {
+  const ls = ss.getSheetByName(LIST_SHEET) || ss.insertSheet(LIST_SHEET);
+  ls.getRange(1, 1, ls.getMaxRows(), ls.getMaxColumns()).breakApart();
+  ls.clear();
+  const widths = [70, 110, 470, 100, 100, 110];
+  widths.forEach(function (w, i) { ls.setColumnWidth(i + 1, w); });
+
+  let r = 1;
+  list.forEach(function (p) {
+    const n = Math.max(10, p.items.length);              // 양식은 10줄, 품목이 더 많으면 늘림
+    const need = r + 6 + n + 1;
+    if (ls.getMaxRows() < need) ls.insertRowsAfter(ls.getMaxRows(), need - ls.getMaxRows());
+
+    const head = [
+      ['쿠팡 파렛트 적재리스트(혼적 시 필수작성)'],
+      ['파렛트(0개) – (NO.) / 박스수량 ( ' + p.total + ' BOX )'],
+      ['입고예정일자 ( 00월 00일 ) / 입고처 ( 인천17 센터 )'],
+      ['업체명 ( ㈜올계농업회사법인 ) /'],
+      ['발주번호 (0)']
+    ];
+    head.forEach(function (row, i) {
+      ls.getRange(r + i, 1, 1, 6).merge().setValue(row[0]);
+    });
+    ls.getRange(r, 1, 1, 6).setFontSize(16).setFontWeight('bold').setFontLine('underline').setHorizontalAlignment('center');
+    ls.getRange(r + 1, 1, 4, 6).setFontSize(13).setFontWeight('bold').setHorizontalAlignment('left');
+
+    const th = r + 5;
+    ls.getRange(th, 1, 1, 6).setValues([['NO', 'SKU No', 'SKU NAME', 'BOX 수량', '수량', '소비기한']])
+      .setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
+    const rows = [];
+    for (let i = 0; i < n; i++) {
+      const it = p.items[i];
+      rows.push([i + 1, '', it ? it.name : '', it ? it.box : '', '', '']);
+    }
+    ls.getRange(th + 1, 1, n, 6).setValues(rows).setFontSize(10).setHorizontalAlignment('center');
+    ls.getRange(th + 1, 1, n, 1).setFontWeight('bold');
+    ls.getRange(r, 1, 6 + n, 6).setBorder(true, true, true, true, true, true).setVerticalAlignment('middle');
+    ls.getRange(r + 1, 1, 4, 6).setBorder(null, null, null, null, false, false);   // 머리글 4줄은 줄 구분선 없이
+    ls.getRange(r + 1, 1, 4, 6).setBorder(true, true, true, true, null, null);
+    r += 6 + n + 2;                                        // 파레트 사이 한 줄 띄움
+  });
+  return ls;
 }
 
 function json_(o) {

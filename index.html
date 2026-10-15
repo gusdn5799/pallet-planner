@@ -801,10 +801,16 @@ function a4Pages(){
   }
   return out;
 }
+// 쿠팡 적재리스트용: 파레트별 품목명·박스 수 (①→④, 아래→위 쌓는 순서대로)
+function coupangList(){
+  return result.pallets.map(p=>{const order=[],cnt={};
+    p.cols.forEach(c=>c.stack.forEach(x=>{if(!(x.code in cnt)){cnt[x.code]=0;order.push(x.code)}cnt[x.code]+=x.qty}));
+    return{total:p.total,items:order.map(code=>({name:result.byCode[code].name,box:cnt[code]}))}});
+}
 async function sendToSheet(){
   const c=gsLoad();if(!c.url)return{skip:true};
   const pages=a4Pages().map(cv=>{let d=cv.toDataURL('image/png');if(d.length>2.6e6)d=cv.toDataURL('image/jpeg',0.92);return d});
-  const res=await fetch(c.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:c.key||'',pages,tilesPerPage:1})});
+  const res=await fetch(c.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:c.key||'',pages,tilesPerPage:1,list:coupangList()})});
   return await res.json();
 }
 $('#copyBtn').addEventListener('click',async()=>{
@@ -825,8 +831,8 @@ $('#copyBtn').addEventListener('click',async()=>{
   try{
     const r=await sendToSheet();
     if(!r.ok)throw new Error(r.error||'시트 등록 실패');
-    msg.textContent=`${cmsg} · 시트 등록 완료 (A4 ${r.pages}장)`;
-    links.innerHTML=`<span class="copy-msg">구글시트:</span><a href="${esc(r.sheetUrl)}" target="_blank" rel="noopener">‘파랫트 적재’ 시트 열기</a><a href="${esc(r.pdfUrl)}" target="_blank" rel="noopener">A4 인쇄용 PDF</a>`;
+    msg.textContent=`${cmsg} · 시트 등록 완료 (A4 ${r.pages}장${r.listUrl?` · 쿠팡 적재리스트 ${result.pallets.length}장`:''})`;
+    links.innerHTML=`<span class="copy-msg">구글시트:</span><a href="${esc(r.sheetUrl)}" target="_blank" rel="noopener">‘파랫트 적재’ 시트 열기</a><a href="${esc(r.pdfUrl)}" target="_blank" rel="noopener">A4 인쇄용 PDF</a>${r.listUrl?`<a href="${esc(r.listUrl)}" target="_blank" rel="noopener">쿠팡 적재리스트 열기</a>`:''}`;
     links.hidden=false;
   }catch(e){
     msg.textContent=`${cmsg} · 시트 등록 실패: ${e.message==='Failed to fetch'?'웹앱에 연결하지 못했습니다 (주소·배포 권한 확인, Claude 미리보기에서는 외부 전송이 막힘)':e.message}`;
