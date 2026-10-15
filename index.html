@@ -279,7 +279,7 @@ button.chip[aria-pressed="true"]{border-color:var(--ink);font-weight:700}
           <button id="copyBtn" class="primary">전체 지시서 이미지 복사</button>
         </div>
       </div>
-      <p class="sheet-note">파레트마다 앞면·뒷면에서 본 모습입니다. 아래부터 위로 쌓고, 흰 줄은 간지 위치입니다. “전체 지시서 이미지 복사”는 전체 파레트를 한 장의 이미지로 클립보드에 복사하고, 시트 연동이 설정돼 있으면 구글시트 ‘파랫트 적재’ 시트에 A4(파레트 4장씩)로 등록합니다.</p>
+      <p class="sheet-note">파레트마다 앞면·뒷면에서 본 모습입니다. 아래부터 위로 쌓고, 흰 줄은 간지 위치입니다. “전체 지시서 이미지 복사”는 전체 파레트를 한 장의 이미지로 클립보드에 복사하고, 시트 연동이 설정돼 있으면 구글시트 ‘파랫트 적재’ 시트에 A4 가로(파레트 4장씩)로 등록합니다.</p>
       <div class="gs-links" id="gsLinks" hidden></div>
       <details class="gs" id="gsBox">
         <summary>구글시트 연동 <span id="gsState" class="copy-msg"></span></summary>
@@ -706,7 +706,7 @@ function fitText(g,t,w){if(g.measureText(t).width<=w)return t;while(t.length&&g.
 function sheetCanvas(list,page,opt){opt=opt||{};
   const pals=list||result.pallets,P=result.pallets.length;
   const FONT='"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif',MONO='"IBM Plex Mono",monospace';
-  const W=1000,PAD=24,GAP=16,COLS=opt.cols||(P>1?2:1),CW=(W-PAD*2-GAP*(COLS-1))/COLS;
+  const W=opt.w||1000,PAD=24,GAP=16,COLS=opt.cols||(P>1?2:1),CW=(W-PAD*2-GAP*(COLS-1))/COLS;
   const HM=Math.max(MAXH,...pals.map(p=>p.h||0)),BH=opt.bh||26,BG=2,TH=HM*BH+(HM-1)*BG;
   const meas=document.createElement('canvas').getContext('2d');
   // 카드별 품목 목록 줄바꿈 계산
@@ -786,13 +786,13 @@ $('#gsSave').addEventListener('click',()=>{const url=$('#gsUrl').value.trim(),ke
   gsSaveCfg({url,key});gsRender()});
 $('#gsClear').addEventListener('click',()=>{gsSaveCfg({});gsRender()});
 gsRender();
-// A4 세로(약 143dpi 1180×1668), 파레트 4장씩 한 쪽
-// 구글시트 이미지 제한(1장 최대 100만 픽셀·2MB) 때문에 한 쪽을 위/아래 두 장으로 나눠 보냄 (각 1180×834)
-const A4W=1180,A4H=1668;
+// A4 가로(약 143dpi 1668×1158, 시트의 1123×780 칸과 같은 비율), 파레트 4장씩(2×2) 한 쪽
+// 구글시트 이미지 제한(1장 최대 100만 픽셀·2MB) 때문에 한 쪽을 위/아래 두 장으로 나눠 보냄 (각 1668×579)
+const A4W=1668,A4H=1158;
 function a4Pages(){
   const out=[],per=4,n=Math.ceil(result.pallets.length/per);
   for(let i=0;i<n;i++){
-    const src=sheetCanvas(result.pallets.slice(i*per,i*per+per),n>1?`${i+1}/${n}쪽`:'',{cols:1,bh:30});
+    const src=sheetCanvas(result.pallets.slice(i*per,i*per+per),n>1?`${i+1}/${n}쪽`:'',{cols:2,bh:34,w:1150});
     const cv=document.createElement('canvas');cv.width=A4W;cv.height=A4H;const g=cv.getContext('2d');
     g.fillStyle='#ffffff';g.fillRect(0,0,A4W,A4H);
     const M=40,sc=Math.min((A4W-2*M)/src.width,(A4H-2*M)/src.height);

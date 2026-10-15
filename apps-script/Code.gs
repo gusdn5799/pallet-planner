@@ -8,9 +8,9 @@
  */
 
 const SHEET_NAME = '파랫트 적재';
-// A4 세로를 96dpi 화면 기준 픽셀로 (210×297mm)
-const PAGE_W = 794;
-const PAGE_H = 1123;
+// A4 가로를 96dpi 화면 기준 픽셀로 (297×210mm, 인쇄 여백만큼 높이를 조금 줄임)
+const PAGE_W = 1123;
+const PAGE_H = 780;
 
 /** (선택) 비밀키를 쓰려면 한 번 실행. 사내용으로 키 없이 쓸 때는 실행하지 않아도 됩니다. */
 function setup() {
@@ -65,9 +65,9 @@ function doPost(e) {
 
       const gid = sh.getSheetId();
       const pdfUrl = 'https://docs.google.com/spreadsheets/d/' + ss.getId() + '/export?format=pdf'
-        + '&gid=' + gid + '&size=A4&portrait=true&fitw=true&gridlines=false&printtitle=false'
+        + '&gid=' + gid + '&size=A4&portrait=false&fitw=true&gridlines=false&printtitle=false'
         + '&sheetnames=false&pagenum=UNDEFINED&horizontal_alignment=CENTER'
-        + '&top_margin=0.2&bottom_margin=0.2&left_margin=0.2&right_margin=0.2';
+        + '&top_margin=0.15&bottom_margin=0.15&left_margin=0.15&right_margin=0.15';
       return json_({ ok: true, pages: pages, sheetUrl: ss.getUrl() + '#gid=' + gid, pdfUrl: pdfUrl });
     } finally {
       lock.releaseLock();
