@@ -172,6 +172,13 @@ button.chip[aria-pressed="true"]{border-color:var(--ink);font-weight:700}
 .pitems{display:flex;flex-wrap:wrap;gap:4px;margin-top:10px}
 .pitems .chip{padding-right:8px}
 .pitems .q{font-family:var(--f-mono);font-weight:600}
+.gs{margin:0 0 14px;border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+.gs summary{cursor:pointer;font-weight:500;font-size:13px}
+.gs-row{display:grid;grid-template-columns:72px minmax(0,1fr);gap:8px;align-items:center;margin-top:6px;font-size:13px}
+.gs-row input{font:inherit;width:100%;min-width:0;border:1px solid var(--line);background:var(--field);color:var(--ink);border-radius:6px;padding:6px 8px}
+.gs-links{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:-4px 0 12px;font-size:13px}
+.gs-links a{color:var(--ink);font-weight:700;border:1px solid var(--line);border-radius:6px;padding:5px 10px;text-decoration:none;background:var(--field)}
+.gs-links a:hover{border-color:var(--muted)}
 .sheet-note{font-size:12px;color:var(--muted);margin:-4px 0 12px}
 .copy-msg{font-size:12px;color:var(--muted)}
 .empty-state{padding:28px;text-align:center;color:var(--muted)}
@@ -272,7 +279,15 @@ button.chip[aria-pressed="true"]{border-color:var(--ink);font-weight:700}
           <button id="copyBtn" class="primary">전체 지시서 이미지 복사</button>
         </div>
       </div>
-      <p class="sheet-note">파레트마다 앞면·뒷면에서 본 모습입니다. 아래부터 위로 쌓고, 흰 줄은 간지 위치입니다. “전체 지시서 이미지 복사”는 전체 파레트를 한 장의 이미지로 복사합니다.</p>
+      <p class="sheet-note">파레트마다 앞면·뒷면에서 본 모습입니다. 아래부터 위로 쌓고, 흰 줄은 간지 위치입니다. “전체 지시서 이미지 복사”는 전체 파레트를 한 장의 이미지로 클립보드에 복사하고, 시트 연동이 설정돼 있으면 구글시트 ‘파랫트 적재’ 시트에 A4(파레트 4장씩)로 등록합니다.</p>
+      <div class="gs-links" id="gsLinks" hidden></div>
+      <details class="gs" id="gsBox">
+        <summary>구글시트 연동 설정 <span id="gsState" class="copy-msg"></span></summary>
+        <p class="sheet-note" style="margin:8px 0">Apps Script 웹앱 주소와 비밀키를 넣으세요. 이 PC의 브라우저에만 저장됩니다. 설치 방법은 GitHub 레포의 README를 참고하세요.</p>
+        <div class="gs-row"><label for="gsUrl">웹앱 주소</label><input id="gsUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off"></div>
+        <div class="gs-row"><label for="gsKey">비밀키</label><input id="gsKey" type="password" placeholder="setup 실행 시 나온 키" autocomplete="off"></div>
+        <div class="gs-row"><span></span><div style="display:flex;gap:6px;flex-wrap:wrap"><button id="gsSave">저장</button><button id="gsClear" class="ghost">지우기</button></div></div>
+      </details>
       <div id="sheet"></div>
       <div class="shot" id="shot" hidden>
         <div class="shot-box" role="dialog" aria-label="지시서 이미지">
@@ -688,11 +703,11 @@ function wrap2(g,t,w){ // 띄어쓰기 기준 최대 2줄
   return[c,fitText(g,t.slice(c.length),w)];
 }
 function fitText(g,t,w){if(g.measureText(t).width<=w)return t;while(t.length&&g.measureText(t+'…').width>w)t=t.slice(0,-1);return t+'…'}
-function sheetCanvas(){
-  const pals=result.pallets,P=pals.length;
+function sheetCanvas(list,page,opt){opt=opt||{};
+  const pals=list||result.pallets,P=result.pallets.length;
   const FONT='"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif',MONO='"IBM Plex Mono",monospace';
-  const W=1000,PAD=24,GAP=16,COLS=P>1?2:1,CW=(W-PAD*2-GAP*(COLS-1))/COLS;
-  const HM=Math.max(MAXH,...pals.map(p=>p.h||0)),BH=26,BG=2,TH=HM*BH+(HM-1)*BG;
+  const W=1000,PAD=24,GAP=16,COLS=opt.cols||(P>1?2:1),CW=(W-PAD*2-GAP*(COLS-1))/COLS;
+  const HM=Math.max(MAXH,...pals.map(p=>p.h||0)),BH=opt.bh||26,BG=2,TH=HM*BH+(HM-1)*BG;
   const meas=document.createElement('canvas').getContext('2d');
   // 카드별 품목 목록 줄바꿈 계산
   const cards=pals.map(p=>{
@@ -709,9 +724,9 @@ function sheetCanvas(){
   const sc=2,cv=document.createElement('canvas');cv.width=W*sc;cv.height=H*sc;
   const g=cv.getContext('2d');g.scale(sc,sc);
   g.fillStyle='#ffffff';g.fillRect(0,0,W,H);
-  const tot=pals.reduce((a,p)=>a+p.total,0),seps=pals.reduce((a,p)=>a+p.seps,0);
+  const tot=result.pallets.reduce((a,p)=>a+p.total,0),seps=result.pallets.reduce((a,p)=>a+p.seps,0);
   const d=new Date(),ds=`${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
-  g.fillStyle='#1a2028';g.font=`700 22px ${FONT}`;g.textBaseline='alphabetic';g.fillText('혼적 파레트 적재 지시서',PAD,PAD+20);
+  g.fillStyle='#1a2028';g.font=`700 22px ${FONT}`;g.textBaseline='alphabetic';g.fillText('혼적 파레트 적재 지시서'+(page?`  (${page})`:''),PAD,PAD+20);
   g.fillStyle='#5b6672';g.font=`500 13px ${FONT}`;g.fillText(`${ds} · 총 ${tot}박스 · 파레트 ${P}장 · 간지 ${seps}장 · 탑마다 아래→위로 적재, 흰 줄 = 간지`,PAD,PAD+42);
   let y=HEAD;
   rows.forEach(row=>{
@@ -758,18 +773,60 @@ function sheetCanvas(){
   });
   return cv;
 }
+/* ---------- 구글시트 연동 ---------- */
+const GSKEY=KEY+'-gs';
+function gsLoad(){try{return JSON.parse(localStorage.getItem(GSKEY))||{}}catch(e){return{}}}
+function gsSaveCfg(c){try{localStorage.setItem(GSKEY,JSON.stringify(c))}catch(e){}}
+function gsRender(){const c=gsLoad();$('#gsUrl').value=c.url||'';$('#gsKey').value=c.key||'';$('#gsState').textContent=c.url&&c.key?'· 연결됨':'· 미설정'}
+$('#gsSave').addEventListener('click',()=>{const url=$('#gsUrl').value.trim(),key=$('#gsKey').value.trim();
+  if(url&&!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(url)){$('#gsState').textContent='· 주소 형식 확인 (…/exec 로 끝나야 함)';return}
+  gsSaveCfg({url,key});gsRender()});
+$('#gsClear').addEventListener('click',()=>{gsSaveCfg({});gsRender()});
+gsRender();
+// A4 세로(150dpi 1240×1754), 파레트 4장씩 한 쪽
+const A4W=1240,A4H=1754;
+function a4Pages(){
+  const out=[],per=4,n=Math.ceil(result.pallets.length/per);
+  for(let i=0;i<n;i++){
+    const src=sheetCanvas(result.pallets.slice(i*per,i*per+per),n>1?`${i+1}/${n}쪽`:'',{cols:1,bh:30});
+    const cv=document.createElement('canvas');cv.width=A4W;cv.height=A4H;const g=cv.getContext('2d');
+    g.fillStyle='#ffffff';g.fillRect(0,0,A4W,A4H);
+    const M=60,sc=Math.min((A4W-2*M)/src.width,(A4H-2*M)/src.height);
+    g.imageSmoothingQuality='high';g.drawImage(src,(A4W-src.width*sc)/2,M,src.width*sc,src.height*sc);
+    out.push(cv);
+  }
+  return out;
+}
+async function sendToSheet(){
+  const c=gsLoad();if(!c.url||!c.key)return{skip:true};
+  const pages=a4Pages().map(cv=>{let d=cv.toDataURL('image/png');if(d.length>2.6e6)d=cv.toDataURL('image/jpeg',0.9);return d});
+  const res=await fetch(c.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:c.key,pages})});
+  return await res.json();
+}
 $('#copyBtn').addEventListener('click',async()=>{
   if(!result.pallets.length)return;
-  const msg=$('#copyMsg');msg.textContent='이미지 만드는 중…';
+  const msg=$('#copyMsg'),links=$('#gsLinks');msg.textContent='이미지 만드는 중…';links.hidden=true;
   try{if(document.fonts&&document.fonts.ready)await document.fonts.ready}catch(e){}
   const cv=sheetCanvas();
   const blobP=new Promise(res=>cv.toBlob(res,'image/png'));
-  const fallback=()=>{$('#shotImg').src=cv.toDataURL('image/png');$('#shot').hidden=false;msg.textContent='';$('#shotClose').focus()};
+  // 1) PC 클립보드 (클릭 직후에 해야 브라우저가 허용함)
+  let copied=false;
+  try{if(!navigator.clipboard||!window.ClipboardItem)throw new Error('no');await navigator.clipboard.write([new ClipboardItem({'image/png':blobP})]);copied=true}catch(e){}
+  const cmsg=copied?'클립보드 복사 완료':'클립보드 복사가 막혀 이미지를 띄웠습니다';
+  if(!copied){$('#shotImg').src=cv.toDataURL('image/png');$('#shot').hidden=false}
+  // 2) 구글시트 '파랫트 적재' 시트에 A4로 등록 (기존 이미지 삭제 후)
+  const c=gsLoad();
+  if(!c.url||!c.key){msg.textContent=cmsg+' · 시트 연동은 미설정';return}
+  msg.textContent=cmsg+' · 시트에 등록 중…';
   try{
-    if(!navigator.clipboard||!window.ClipboardItem)throw new Error('no');
-    await navigator.clipboard.write([new ClipboardItem({'image/png':blobP})]);
-    msg.textContent='이미지를 클립보드에 복사했습니다. 카톡이나 메신저에 붙여넣으세요.';
-  }catch(e){fallback()}
+    const r=await sendToSheet();
+    if(!r.ok)throw new Error(r.error||'시트 등록 실패');
+    msg.textContent=`${cmsg} · 시트 등록 완료 (A4 ${r.pages}장)`;
+    links.innerHTML=`<span class="copy-msg">구글시트:</span><a href="${esc(r.sheetUrl)}" target="_blank" rel="noopener">‘파랫트 적재’ 시트 열기</a><a href="${esc(r.pdfUrl)}" target="_blank" rel="noopener">A4 인쇄용 PDF</a>`;
+    links.hidden=false;
+  }catch(e){
+    msg.textContent=`${cmsg} · 시트 등록 실패: ${e.message==='Failed to fetch'?'웹앱에 연결하지 못했습니다 (주소·배포 권한 확인, Claude 미리보기에서는 외부 전송이 막힘)':e.message}`;
+  }
 });
 $('#shotClose').addEventListener('click',()=>{$('#shot').hidden=true});
 $('#shot').addEventListener('click',e=>{if(e.target.id==='shot')$('#shot').hidden=true});
