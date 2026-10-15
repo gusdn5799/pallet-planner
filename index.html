@@ -775,7 +775,7 @@ function sheetCanvas(list,page,opt){opt=opt||{};
 }
 /* ---------- 구글시트 연동 ---------- */
 // 사내용: 웹앱 주소를 코드에 고정. 배포 후 받은 …/exec 주소를 여기에 넣으면 모든 PC에서 바로 동작
-const GS_URL='';
+const GS_URL='https://script.google.com/macros/s/AKfycbypulJPvbSofAE-JdswOtqK1Nnj9h7dc5cWabAwV8hZet8KAbo1aGzsQmi7d725GaDG/exec';
 const GS_TOKEN='';
 const GSKEY=KEY+'-gs';
 function gsLoad(){let c={};try{c=JSON.parse(localStorage.getItem(GSKEY))||{}}catch(e){}return c.url?c:{url:GS_URL,key:GS_TOKEN}}
