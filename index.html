@@ -1,0 +1,1001 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;font-size:14px;font-family:system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+<title>혼적 파레트 적재 플래너</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* Layout: 좌측 적재 리스트 입력 패널 + 우측 결과(요약 → 3D → 적재 지시서). 900px 이하에서는 세로로 쌓임 */
+:root{
+  --bg:#eceff2; --panel:#ffffff; --ink:#1a2028; --muted:#5b6672; --line:#d3d9df;
+  --accent:#f0b400; --accent-ink:#1a2028; --warn:#b4480f; --warn-bg:#fff3e8;
+  --scene:#e2e6ea; --floor:#d3d9df; --field:#f6f7f9;
+  --f-body:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12161b; --panel:#1a2027; --ink:#e6eaee; --muted:#9aa5b1; --line:#2d353f;
+  --accent:#f5c23a; --accent-ink:#14181d; --warn:#fb9a5b; --warn-bg:#2a1d14;
+  --scene:#171c22; --floor:#222a33; --field:#141920; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12161b; --panel:#1a2027; --ink:#e6eaee; --muted:#9aa5b1; --line:#2d353f;
+  --accent:#f5c23a; --accent-ink:#14181d; --warn:#fb9a5b; --warn-bg:#2a1d14;
+  --scene:#171c22; --floor:#222a33; --field:#141920; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;padding:7px 12px}
+button:hover{border-color:var(--muted)}
+button:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
+button.ghost{background:transparent}
+button:disabled{opacity:.45;cursor:not-allowed}
+h1,h2,h3{margin:0;text-wrap:balance}
+
+.top{max-width:1400px;margin:0 auto 18px;display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:12px}
+.mark{width:34px;height:34px;flex:none;border-radius:4px;background:
+  linear-gradient(var(--accent),var(--accent)) 0 0/15px 15px no-repeat,
+  linear-gradient(var(--accent),var(--accent)) 19px 0/15px 15px no-repeat,
+  linear-gradient(var(--ink),var(--ink)) 0 19px/15px 15px no-repeat,
+  linear-gradient(var(--accent),var(--accent)) 19px 19px/15px 15px no-repeat}
+h1{font-size:22px;font-weight:700;letter-spacing:-.01em}
+.spec{margin:2px 0 0;color:var(--muted);font-size:13px}
+.spec b{color:var(--ink);font-weight:500}
+
+.app{max-width:1400px;margin:0 auto;display:grid;grid-template-columns:minmax(300px,400px) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:900px){.app{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+.panel-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+h2{font-size:15px;font-weight:700}
+.input{position:sticky;top:max(12px,env(safe-area-inset-top,0px))}
+@media (max-width:900px){.input{position:static}}
+
+.rows{display:flex;flex-direction:column;gap:6px;max-height:min(52vh,560px);overflow-y:auto;padding-right:2px}
+.row{display:grid;grid-template-columns:28px minmax(0,1fr) 64px 64px 28px;gap:6px;align-items:center}
+.code{width:28px;height:28px;border-radius:5px;background:var(--c);color:#fff;font-family:var(--f-mono);font-weight:600;display:grid;place-items:center;text-shadow:0 1px 1px rgba(0,0,0,.35)}
+.row input{font:inherit;width:100%;min-width:0;border:1px solid var(--line);background:var(--field);color:var(--ink);border-radius:6px;padding:6px 8px}
+.row input.qty{text-align:right;font-family:var(--f-mono)}
+.calc{font-size:11px;color:var(--muted);text-align:right;white-space:nowrap}
+.del{padding:0;width:28px;height:28px;color:var(--muted);background:transparent;border-color:transparent;font-size:18px;line-height:1}
+.del:hover{color:var(--warn);border-color:var(--line)}
+.row-head{display:grid;grid-template-columns:28px minmax(0,1fr) 64px 64px 28px;gap:6px;font-size:11px;color:var(--muted);letter-spacing:.04em;margin-bottom:6px}
+.row-head span:nth-child(3),.row-head span:nth-child(4){text-align:right}
+.row-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.paste{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+.paste summary{cursor:pointer;font-weight:500}
+.paste p{margin:8px 0;color:var(--muted);font-size:13px}
+.paste textarea{width:100%;font-family:var(--f-mono);font-size:13px;border:1px solid var(--line);background:var(--field);color:var(--ink);border-radius:6px;padding:8px;resize:vertical}
+.paste-foot{display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap}
+#pasteMsg{font-size:13px;color:var(--muted)}
+.rules{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+.rules h3{font-size:12px;letter-spacing:.06em;color:var(--muted);font-weight:500;margin-bottom:6px}
+.rules ul{margin:0;padding-left:18px;color:var(--muted);font-size:13px;display:grid;gap:3px}
+
+.out{display:flex;flex-direction:column;gap:14px;min-width:0}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+@media (max-width:560px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.stat .k{font-size:12px;color:var(--muted)}
+.stat .v{font-family:var(--f-mono);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums}
+.stat .v small{font-size:13px;color:var(--muted);font-weight:500;margin-left:3px;font-family:var(--f-body)}
+.stat.hl{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.warn{background:var(--warn-bg);border:1px solid var(--warn);color:var(--ink);border-radius:10px;padding:10px 14px;font-size:13px}
+.warn ul{margin:4px 0 0;padding-left:18px}
+.warn strong{color:var(--warn)}
+
+.viewer{padding:0;overflow:hidden}
+.tabs{display:flex;gap:4px;padding:10px 10px 0;overflow-x:auto;border-bottom:1px solid var(--line)}
+.tab{border:1px solid transparent;border-bottom:none;border-radius:6px 6px 0 0;background:transparent;padding:8px 14px;white-space:nowrap;color:var(--muted)}
+.tab[aria-selected="true"]{background:var(--scene);border-color:var(--line);color:var(--ink);font-weight:700;margin-bottom:-1px}
+.tab .mono{font-size:12px;margin-left:4px;font-weight:500}
+.view-wrap{position:relative;background:var(--scene);height:clamp(340px,56vh,600px)}
+#view{position:absolute;inset:0}
+#view canvas{display:block;width:100%;height:100%;touch-action:none}
+.view-tools{position:absolute;top:10px;right:10px;display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;max-width:calc(100% - 20px)}
+.view-tools button{padding:5px 10px;font-size:12px;background:var(--panel)}
+.view-tools button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.dragtip{position:absolute;z-index:3;pointer-events:none;background:var(--ink);color:var(--panel);font-size:12px;font-weight:500;padding:5px 9px;border-radius:6px;white-space:nowrap;transform:translate(14px,-130%)}
+.dragtip.bad{background:var(--warn);color:#fff}
+.hint{position:absolute;left:10px;bottom:8px;font-size:11px;color:var(--muted);pointer-events:none}
+.nogl{position:absolute;inset:0;display:grid;place-items:center;padding:20px;text-align:center;color:var(--muted)}
+.layer-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 16px;border-top:1px solid var(--line)}
+.layer-bar label{font-size:13px;font-weight:500}
+.layer-bar input[type=range]{flex:1 1 140px;accent-color:var(--accent)}
+#layerVal{flex:1 1 100%;font-size:12px;color:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 14px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:3px 10px 3px 3px;font-size:12px;max-width:100%}
+.chip .code{width:20px;height:20px;font-size:11px;border-radius:999px;flex:none}
+.chip .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+button.chip{cursor:pointer}
+button.chip[aria-pressed="true"]{border-color:var(--ink);font-weight:700}
+.legend .clear{border-radius:999px;font-size:12px;padding:3px 10px}
+
+.modebar{display:inline-flex;align-self:flex-start;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:3px;gap:3px}
+.mode{border:none;background:transparent;padding:7px 18px;font-weight:500;color:var(--muted)}
+.mode[aria-selected="true"]{background:var(--ink);color:var(--panel);font-weight:700}
+.cursor{font-size:13px;color:var(--muted)}
+.cursor b{color:var(--ink)}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,190px),1fr));gap:6px}
+.mbtn{display:grid;grid-template-columns:28px minmax(0,1fr) auto;align-items:center;gap:8px;text-align:left;padding:6px 10px 6px 6px}
+.mbtn .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+.mbtn .left{font-family:var(--f-mono);font-size:11px;color:var(--muted);white-space:nowrap}
+.mbtn .left b{color:var(--ink);font-size:16px;margin-right:2px}
+.mbtn:disabled .code{filter:grayscale(1);opacity:.5}
+.mbtn:disabled .left b{color:var(--muted)}
+.mbtn:not(:disabled):active{transform:translateY(1px)}
+.mactions{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.mdone{font-size:13px;font-weight:700;color:var(--ink);padding:6px 0}
+
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));gap:12px}
+.pcard{border:1px solid var(--line);border-radius:8px;padding:12px;min-width:0}
+.pcard h3{font-size:14px;display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:10px}
+.pcard h3 .mono{font-size:12px;color:var(--muted);font-weight:500}
+.faces{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.face-t{font-size:12px;font-weight:700;margin-bottom:6px;text-align:center}
+.face-t span{font-weight:400;color:var(--muted)}
+.towers{display:grid;grid-template-columns:1fr 1fr;gap:3px}
+.tw{display:flex;flex-direction:column-reverse;gap:2px}
+.bx{height:24px;border-radius:3px;display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--f-mono);font-weight:600;font-size:13px;text-shadow:0 1px 1px rgba(0,0,0,.35)}
+.sg{border-radius:3px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;color:#fff;text-align:center;padding:0 4px;min-width:0;overflow:hidden;text-shadow:0 1px 1px rgba(0,0,0,.4);
+  background-image:repeating-linear-gradient(to top,transparent 0 24px,rgba(0,0,0,.25) 24px 26px)}
+.sg .sn{font-size:12px;font-weight:700;line-height:1.25;max-width:100%;overflow:hidden;word-break:keep-all;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.sg.q1{flex-direction:row;gap:4px}
+.sg.q1 .sn{-webkit-line-clamp:1;font-size:11px}
+.sg .sq{font-family:var(--f-mono);font-size:11px;font-weight:600;opacity:.95}
+.sg.gj{box-shadow:inset 0 -5px 0 #ffffff,inset 0 -6px 0 rgba(0,0,0,.45)}
+.dot{width:10px;height:10px;border-radius:999px;background:var(--c);flex:none;margin-left:5px}
+.shot{position:fixed;inset:0;z-index:20;background:rgba(10,14,18,.72);display:flex;align-items:center;justify-content:center;
+  padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.shot[hidden]{display:none}
+.shot-box{background:var(--panel);border-radius:10px;padding:14px;max-width:min(960px,100%);max-height:100%;display:flex;flex-direction:column;gap:10px}
+.shot-box p{margin:0;font-size:13px}
+.shot-img{overflow:auto;min-height:0;border:1px solid var(--line);border-radius:6px}
+.shot-img img{display:block;max-width:100%;height:auto}
+.shot-foot{display:flex;justify-content:flex-end}
+.bx.e{background:transparent;border:1px dashed var(--line)}
+.tlabel{text-align:center;font-family:var(--f-mono);font-size:12px;color:var(--muted);margin-top:4px}
+.base{grid-column:1/-1;height:7px;border-radius:2px;background:#c39a66;margin-top:2px}
+.pitems{display:flex;flex-wrap:wrap;gap:4px;margin-top:10px}
+.pitems .chip{padding-right:8px}
+.pitems .q{font-family:var(--f-mono);font-weight:600}
+.sheet-note{font-size:12px;color:var(--muted);margin:-4px 0 12px}
+.copy-msg{font-size:12px;color:var(--muted)}
+.empty-state{padding:28px;text-align:center;color:var(--muted)}
+#copyFallback{width:100%;height:160px;margin-top:10px;font-family:var(--f-mono);font-size:12px}
+@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto!important}}
+</style>
+
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="mark" aria-hidden="true"></span>
+    <div>
+      <h1>혼적 파레트 적재 플래너</h1>
+      <p class="spec"><b>1100×1100</b> 파레트 · 바닥 <b>2×2</b> · 권장 <b>5층</b>(20박스) · 최대 <b>7층</b>(28박스)</p>
+    </div>
+  </div>
+</header>
+
+<main class="app">
+  <section class="panel input" aria-labelledby="listTitle">
+    <div class="panel-h"><h2 id="listTitle">적재 리스트</h2><span id="count" class="mono copy-msg"></span></div>
+    <div class="row-head" aria-hidden="true"><span>코드</span><span>품목명</span><span>박스</span><span>탑</span><span></span></div>
+    <div class="rows" id="rows"></div>
+    <div class="row-actions">
+      <button id="addRow" class="primary">+ 품목 추가</button>
+      <button id="loadSample" class="ghost">예시 불러오기</button>
+      <button id="clearAll" class="ghost">전체 지우기</button>
+    </div>
+    <details class="paste">
+      <summary>엑셀에서 붙여넣기</summary>
+      <p>품목명과 박스 수량 두 열을 복사해서 붙여넣으세요. 기존 목록은 교체됩니다. 머리글 행은 자동으로 건너뜁니다.</p>
+      <textarea id="pasteBox" rows="6" placeholder="유기농 통닭 1kg	22&#10;무항생제 유정란 10구	13"></textarea>
+      <div class="paste-foot"><button id="applyPaste">목록에 적용</button><span id="pasteMsg"></span></div>
+    </details>
+    <div class="rules">
+      <h3>적재 규칙 (우선순위 순)</h3>
+      <ul>
+        <li>① 파레트 수를 최소로. 권장 5층(20박스)이고, 마지막 파레트가 16박스 이하면 1장 줄여 최대 7층까지 쌓습니다.</li>
+        <li>② 20박스 이하 품목은 가능한 한 파레트에 몹니다.</li>
+        <li>①-1 ①→②→③→④ 탑 순서로 쌓을 때, 한 품목을 쌓기 시작하면 그 품목을 다 쌓기 전까지 다른 품목을 쌓지 않습니다.</li>
+        <li>③ 한 면에 들어가는 품목은 앞면(①②) 또는 뒷면(③④) 한쪽에만 둡니다. 단면만 보고 품목을 찾을 수 있게 하기 위함입니다.</li>
+        <li>④ 면 안에서는 한 탑을 채우고, 잔여는 옆 탑 맨 아래에 깐 뒤 다른 품목을 올립니다 (예: A7+B3).</li>
+        <li>⑤ 간지는 최소로, 품목이 바뀌는 곳마다 넣습니다.</li>
+        <li>⑥ 층수(박스 수 ÷ 4 올림)는 넘기지 않습니다. 대신 탑 높이를 탑마다 다르게 해서라도 한 품목이 앞뒤로 나뉘지 않는 배치를 우선합니다. 나뉠 일이 없으면 탑 높이를 최대한 고르게 맞춥니다.</li>
+        <li>⑦ 파레트 수를 줄이려고 6~7층으로 쌓을 때도 같은 규칙을 씁니다. 기준 높이만 5층 대신 6층·7층으로 잡습니다.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="out">
+    <div class="modebar" role="tablist" aria-label="배치 방식">
+      <button id="modeAuto" class="mode" role="tab" aria-selected="true">자동 배치</button>
+      <button id="modeManual" class="mode" role="tab" aria-selected="false">직접 배치</button>
+    </div>
+    <div class="panel manual" id="manualPanel" hidden>
+      <div class="panel-h"><h2>직접 배치</h2><span class="cursor" id="swapCount"></span></div>
+      <p class="cursor" id="cursorMsg" style="margin:0"></p>
+      <div class="mactions">
+        <button id="mSwap2" aria-pressed="false">이동·교체 켜기</button>
+        <button id="mUndo">되돌리기</button>
+        <button id="mReset" class="ghost">자동 배치로 되돌리기</button>
+      </div>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="warn" id="warn" hidden></div>
+
+    <div class="panel viewer">
+      <div class="tabs" id="tabs" role="tablist" aria-label="파레트 선택"></div>
+      <div class="view-wrap">
+        <div id="view"></div>
+        <div class="view-tools" role="group" aria-label="보기 방향">
+          <button data-view="iso" aria-pressed="true">3D</button>
+          <button data-view="front" aria-pressed="false">정면</button>
+          <button data-view="side" aria-pressed="false">측면</button>
+          <button data-view="back" aria-pressed="false">뒷면</button>
+          <button data-view="top" aria-pressed="false">위</button>
+          <button id="swapBtn" aria-pressed="false" hidden>이동·교체</button>
+          <button id="spin" aria-pressed="false">자동 회전</button>
+        </div>
+        <div class="hint" id="hint">드래그: 회전 · 휠/핀치: 확대 · 우클릭/두 손가락: 이동</div>
+        <div class="dragtip" id="dragTip" hidden></div>
+      </div>
+      <div class="layer-bar">
+        <label for="layer">적재 진행</label>
+        <input type="range" id="layer" min="0" max="20" step="1" value="20">
+        <span id="layerVal" class="mono"></span>
+        <button id="play">적재 순서 재생</button>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h">
+        <h2>적재 지시서</h2>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span class="copy-msg" id="copyMsg"></span>
+          <button id="copyBtn" class="primary">전체 지시서 이미지 복사</button>
+        </div>
+      </div>
+      <p class="sheet-note">파레트마다 앞면·뒷면에서 본 모습입니다. 아래부터 위로 쌓고, 흰 줄은 간지 위치입니다. “전체 지시서 이미지 복사”는 전체 파레트를 한 장의 이미지로 복사합니다.</p>
+      <div id="sheet"></div>
+      <div class="shot" id="shot" hidden>
+        <div class="shot-box" role="dialog" aria-label="지시서 이미지">
+          <p><b>자동 복사가 막혀 있어 이미지를 띄웠습니다.</b> 이미지를 우클릭(폰은 길게 누르기) → “이미지 복사”로 복사하세요.</p>
+          <div class="shot-img"><img id="shotImg" alt="적재 지시서 이미지"></div>
+          <div class="shot-foot"><button id="shotClose">닫기</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function(){
+const $=s=>document.querySelector(s);
+const LET='ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const CAP=20, MAXH=5, MAXL=7, CAPMAX=28, KEY='olkye-pallet-planner-v1';
+const POSNAME=['앞·좌','앞·우','뒤·우','뒤·좌'];
+const GEO=[[-0.5,0.5],[0.5,0.5],[0.5,-0.5],[-0.5,-0.5]];
+const POSNUM=['①','②','③','④'];
+const SAMPLE=[["유기농 통닭 1kg",22],["무항생제 유정란 10구",13],["유기농 계란 15구",8],["유기농 닭가슴살 500g",6],["유기농 닭다리살 500g",4],["유기농 닭볶음탕용",3]];
+
+let items=load(), result=null, active='all', mode=loadMode(), plan=loadPlan(), hist=[], sel=null, swapOn=false, drag=null, lastViewKey='', focus=null, layer=Infinity, nBoxes=0, view='iso', timer=null, playT=null;
+
+function load(){try{const v=JSON.parse(localStorage.getItem(KEY));if(Array.isArray(v)&&v.length)return v.slice(0,26)}catch(e){}return SAMPLE.map(([name,qty])=>({name,qty}))}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(items));localStorage.setItem(KEY+'-plan',JSON.stringify(plan));localStorage.setItem(KEY+'-mode',mode)}catch(e){}}
+function loadPlan(){try{const v=JSON.parse(localStorage.getItem(KEY+'-plan'));if(v&&Array.isArray(v.p))return v}catch(e){}return null}
+function loadMode(){try{return localStorage.getItem(KEY+'-mode')==='manual'?'manual':'auto'}catch(e){return'auto'}}
+function color(i){return `hsl(${Math.round((i*137.508+205)%360)}, 60%, 50%)`}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+/* ---------- 배정 로직 ----------
+ 우선순위: ① 파레트 수 최소 ② 20박스 이하 품목은 한 파레트에 ③ 한 면에 들어가는 품목은 한 면에(앞 ①② / 뒤 ③④)
+           ④ 면 안에서 잔여 쪼개지 않기 ⑤ 간지 최소 ⑥ 큰 품목은 앞·아래, 작은 품목은 뒤·위
+*/
+// 파레트 박스 수 → 탑 높이 [①,②,③,④]. 층은 아래부터 꽉, 넘치는 박스는 뒷면(③④)부터
+function levelCaps4(n){const b=Math.floor(n/4),r=n%4,caps=[b,b,b,b];[2,3,1,0].slice(0,r).forEach(k=>caps[k]++);return caps}
+// 탑 높이에 맞춰 품목 순서대로 채움 → 잔여가 옆 탑 맨 아래로 이어짐
+function fillTowers(order,caps){
+  const towers=caps.map(c=>({cap:c,stack:[],fill:0}));let ti=0;const parts={};
+  for(const e of order){let q=e.qty;
+    while(q>0&&ti<towers.length){const t=towers[ti];if(t.fill>=t.cap){ti++;continue}const take=Math.min(q,t.cap-t.fill);
+      const top=t.stack[t.stack.length-1];if(top&&top.code===e.code)top.qty+=take;else t.stack.push({code:e.code,qty:take});
+      t.fill+=take;q-=take;(parts[e.code]=parts[e.code]||[]).push(ti)}}
+  let pen=0;
+  Object.keys(parts).forEach(code=>{const partial=[...new Set(parts[code])].filter(k=>{const t=towers[k];return !(t.stack.length===1&&t.fill===t.cap)}).length;if(partial>1)pen+=partial-1});
+  const seps=towers.reduce((x,t)=>x+Math.max(0,t.stack.length-1),0);
+  return{towers,pen,seps};
+}
+// pin: 앞뒤 면에 걸친 품목은 앞면에선 맨 끝, 뒷면에선 맨 처음 → 쌓기 시작한 품목은 끝날 때까지 이어서 쌓음
+function bestFaceOrder(entries,caps,rank,pin){
+  const pinE=pin?entries.find(e=>e.code===pin.code):null;
+  const wrap=o=>!pinE?o:(pin.at==='first'?[pinE,...o]:[...o,pinE]);
+  const base=[...entries].filter(e=>e!==pinE).sort((a,b)=>rank[a.code]-rank[b.code]);
+  const inv=o=>{let c=0;for(let i=0;i<o.length;i++)for(let j=i+1;j<o.length;j++)if(rank[o[i].code]>rank[o[j].code])c++;return c};
+  const cost=o0=>{const o=wrap(o0);const r=fillTowers(o,caps);return{r,inv:inv(o),c:r.pen*1000+r.seps*20+inv(o)}};
+  let best=cost(base),bestO=base;
+  if(base.length<=6){const used=[],cur=[];
+    const go=()=>{if(cur.length===base.length){const x=cost(cur);if(x.c<best.c){best=x;bestO=cur.slice()}return}
+      for(let i=0;i<base.length;i++){if(used[i])continue;used[i]=true;cur.push(base[i]);go();cur.pop();used[i]=false}};go()}
+  else{let imp=true,g=0;while(imp&&g++<40){imp=false;for(let i=0;i<bestO.length;i++)for(let j=0;j<bestO.length;j++){if(i===j)continue;const o=bestO.slice();const[x]=o.splice(i,1);o.splice(j,0,x);const c=cost(o);if(c.c<best.c){best=c;bestO=o;imp=true}}}}
+  return{towers:best.r.towers,pen:best.r.pen,seps:best.r.seps,inv:best.inv};
+}
+// 파레트 1장: 앞면/뒷면 나누기 → 면 안에서 탑 쌓기
+function buildPallet(entries,rank,palSplit){palSplit=palSplit||new Set();
+  const N=entries.reduce((a,e)=>a+e.qty,0),H=Math.ceil(N/4),lo=Math.max(0,H-3);
+  // 층수(H)는 고정. 탑 높이는 H 이하에서 자유롭게 → 앞면/뒷면 용량을 바꿔가며 품목이 한 면에 들어가는 경우를 최우선으로 찾음
+  // 순위: 앞뒤 분산 → 면 안 잔여 쪼개짐 → 높이 고르기 → 간지 → 큰 품목 앞 → 맨 위 박스 뒷면
+  const frontRank=c=>c.front.reduce((a,x)=>a+rank[x.code]*x.qty,0)/Math.max(1,c.front.reduce((a,x)=>a+x.qty,0));
+  const pairs=F=>{const out=[];for(let x=lo;x<=H;x++){const y=F-x;if(y>=lo&&y<=H)out.push([x,y])}return out};
+  const k=entries.length;
+  const candsFor=F=>{
+    const cands=[],seen=new Set();
+    const addCand=(front,back,splitCode)=>{const key=front.map(x=>x.code+x.qty).sort().join();if(seen.has(key))return;seen.add(key);cands.push({front,back,splitCode})};
+    if(k<=16){
+      for(let m=0;m<(1<<k);m++){let s=0;for(let i=0;i<k;i++)if(m>>i&1)s+=entries[i].qty;if(s>F)continue;
+        const fr=entries.filter((_,i)=>m>>i&1),bk=entries.filter((_,i)=>!(m>>i&1));
+        if(s===F){addCand(fr,bk,null);continue}
+        bk.forEach(it=>{if(it.qty>F-s){const part=F-s;addCand(fr.concat([{code:it.code,qty:part}]),bk.map(x=>x===it?{code:x.code,qty:x.qty-part}:x),it.code)}});
+      }
+    }
+    if(!cands.length){
+      const fr=[],bk=[];let free=F;[...entries].sort((a,b)=>b.qty-a.qty).forEach(e=>{if(free>=e.qty){fr.push(e);free-=e.qty}else if(free>0){fr.push({code:e.code,qty:free});bk.push({code:e.code,qty:e.qty-free});free=0}else bk.push(e)});
+      cands.push({front:fr,back:bk,splitCode:fr.find(x=>bk.some(y=>y.code===x.code))?.code||null});
+    }
+    const faceMax=Math.max(F,N-F);
+    cands.forEach(c=>{const it=c.splitCode&&entries.find(e=>e.code===c.splitCode);c.fs=c.splitCode?(it.qty<=faceMax&&!palSplit.has(c.splitCode)?1:0.5):0;c.F=F;c.faceMax=faceMax});
+    return cands;
+  };
+  // 가능한 앞면 용량마다 면 나누기 후보를 만들고, 앞뒤 분산이 가장 적은 것만 남김
+  let all=[];
+  for(let F=0;F<=N;F++){if(!pairs(F).length||!pairs(N-F).length)continue;all=all.concat(candsFor(F))}
+  const minFs=Math.min(...all.map(c=>c.fs));
+  const lv=(F)=>{const ideal=N/2;return Math.abs(F-ideal)};
+  let pool=all.filter(c=>c.fs===minFs);
+  pool.sort((a,b)=>lv(a.F)-lv(b.F)||a.front.length+a.back.length-(b.front.length+b.back.length)||frontRank(a)-frontRank(b));
+  pool=pool.slice(0,60);
+  let best=null;
+  for(const c of pool){
+    const pf=c.splitCode?{code:c.splitCode,at:'last'}:null,pb=c.splitCode?{code:c.splitCode,at:'first'}:null;
+    let bf=null,bb=null;
+    for(const cp of pairs(c.F)){const r=bestFaceOrder(c.front,cp,rank,pf);const v=r.pen*1e4+r.seps*100+r.inv+Math.abs(cp[0]-cp[1])*500;if(!bf||v<bf.v)bf={...r,v,cp}}
+    for(const cp of pairs(N-c.F)){const r=bestFaceOrder(c.back,cp,rank,pb);const v=r.pen*1e4+r.seps*100+r.inv+Math.abs(cp[0]-cp[1])*500-(cp[0]>cp[1]?0:0);if(!bb||v<bb.v)bb={...r,v,cp}}
+    const caps=[...bf.cp,...bb.cp],spread=Math.max(...caps)-Math.min(...caps);
+    const frontUp=Math.max(0,(bf.cp[0]+bf.cp[1])-(bb.cp[0]+bb.cp[1]));
+    const sc=minFs*1e9+(bf.pen+bb.pen)*1e6+spread*1e4+(bf.seps+bb.seps)*100+(bf.inv+bb.inv)+frontRank(c)*0.01+frontUp*0.001;
+    if(!best||sc<best.sc)best={sc,f:bf,b:bb,c};
+  }
+  const towers=[best.f.towers[0],best.f.towers[1],best.b.towers[0],best.b.towers[1]];
+  const faceSplit=best.c.splitCode&&entries.find(e=>e.code===best.c.splitCode).qty<=best.c.faceMax&&!palSplit.has(best.c.splitCode)?best.c.splitCode:null;
+  return{towers,faceSplit};
+}
+// 품목을 쪼개지 않고 파레트에 담기. B를 주면 그 장수로만 시도(실패 시 null)
+function packPallets(items,cap,fixedB){
+  const tot=items.reduce((a,x)=>a+x.qty,0);if(!tot)return fixedB===undefined||fixedB===0?[]:null;
+  const its=[...items].sort((a,b)=>b.qty-a.qty||a.r-b.r);
+  if(its[0].qty>cap)return fixedB===undefined?its.map(x=>[x]):null;
+  const LB=Math.ceil(tot/cap);
+  const Bs=fixedB===undefined?Array.from({length:its.length-LB+1},(_,k)=>LB+k):(fixedB>=LB?[fixedB]:[]);
+  for(const B of Bs){
+    let nodes=0;const bins=[];
+    const subsets=(arr,need,cb)=>{
+      const suffix=[];let acc=0;for(let i=arr.length-1;i>=0;i--){acc+=arr[i].qty;suffix[i]=acc}
+      const pick=[];
+      const go=(i,n)=>{if(++nodes>400000)return false;if(n===0)return cb(pick.slice());if(i>=arr.length||suffix[i]<n)return false;
+        if(arr[i].qty<=n){pick.push(arr[i]);if(go(i+1,n-arr[i].qty))return true;pick.pop()}
+        let j=i+1;while(j<arr.length&&arr[j].qty===arr[i].qty)j++;return go(j,n)};
+      return go(0,need);
+    };
+    const rec=(rem,left,slack)=>{
+      if(!rem.length)return left===0||fixedB===undefined;
+      if(left===1){if(rem.reduce((a,x)=>a+x.qty,0)<=cap){bins.push(rem);return true}return false}
+      const anchor=rem[0],rest=rem.slice(1);
+      for(let target=cap;target>=cap-slack&&target>=anchor.qty;target--){
+        const ok=subsets(rest,target-anchor.qty,ch=>{bins.push([anchor,...ch]);const nx=rest.filter(x=>!ch.includes(x));if(rec(nx,left-1,slack-(cap-target)))return true;bins.pop();return false});
+        if(ok)return true;if(nodes>400000)return false;
+      }
+      return false;
+    };
+    if(rec(its,B,B*cap-tot))return bins;
+  }
+  if(fixedB!==undefined)return null;
+  const fb=[];its.forEach(x=>{const t=fb.find(b=>b.s+x.qty<=cap);if(t){t.it.push(x);t.s+=x.qty}else fb.push({it:[x],s:x.qty})});return fb.map(b=>b.it);
+}
+// 20박스 넘는 품목은 cap 단위 전용 파레트, 나머지는 혼적 대상
+function splitBig(order,rank,cap){
+  const ded=[],items=[];
+  order.forEach(s=>{if(s.qty>CAP){const k=Math.floor(s.qty/cap);for(let n=0;n<k;n++)ded.push([{code:s.code,qty:cap}]);const r=s.qty%cap;if(r)items.push({code:s.code,qty:r,r:rank[s.code]})}
+    else items.push({code:s.code,qty:s.qty,r:rank[s.code]})});
+  return{ded,items};
+}
+// 1단계: 파레트 장수와 품목 배정
+function assignPallets(order,rank,total){
+  const B5=Math.ceil(total/CAP),last=total-CAP*(B5-1);
+  let B=B5,maxCap=CAP,reduced=false;
+  if(B5>1&&last<=16&&total<=CAPMAX*(B5-1)){B=B5-1;maxCap=CAPMAX;reduced=true}
+  const C0=Math.max(1,Math.ceil(total/B));
+  for(let C=reduced?C0:CAP;C<=maxCap;C++){
+    const sp=splitBig(order,rank,C),nb=B-sp.ded.length;if(nb<0)continue;
+    const res=packPallets(sp.items,C,nb);if(res)return{bins:sp.ded.concat(res),reduced,B5,last};
+    if(!reduced)break;
+  }
+  // 품목을 안 나누고는 이 장수에 못 넣음 → 파레트 수 우선, 나뉘는 조각이 가장 적은 높이를 고름
+  let best=null;
+  for(let C=reduced?C0:CAP;C<=maxCap;C++){
+    if(C*B<total)continue;
+    const bins=Array.from({length:B},()=>({it:[],free:C}));
+    const add=(b,code,q)=>{const t=b.it.find(x=>x.code===code);if(t)t.qty+=q;else b.it.push({code,qty:q});b.free-=q};
+    order.forEach(s=>{let q=s.qty;
+      while(q>0){const fit=bins.filter(b=>b.free>=q).sort((a,b)=>a.free-b.free)[0];if(fit){add(fit,s.code,q);break}
+        const b=bins.slice().sort((a,b)=>b.free-a.free)[0];const t=Math.min(q,b.free);add(b,s.code,t);q-=t}});
+    const pieces=bins.reduce((a,b)=>a+b.it.length,0);
+    if(!best||pieces<best.pieces)best={pieces,bins};
+  }
+  return{bins:best.bins.map(b=>b.it).filter(x=>x.length),reduced,B5,last};
+}
+function compute(list){
+  const skus=list.map((it,i)=>({i,code:LET[i],name:(it.name||'').trim()||('품목 '+LET[i]),qty:Math.max(0,Math.floor(+it.qty||0)),color:color(i)})).filter(s=>s.qty>0);
+  const byCode={};skus.forEach(s=>byCode[s.code]=s);
+  const total=skus.reduce((a,s)=>a+s.qty,0);
+  if(!total)return{pallets:[],skus,byCode,total:0,warnings:[]};
+  const order=[...skus].sort((a,b)=>b.qty-a.qty||a.i-b.i);
+  const rank={};order.forEach((s,k)=>rank[s.code]=k);
+  const A=assignPallets(order,rank,total);
+  const groups=A.bins.map(bn=>{const entries=bn.map(x=>({code:x.code,qty:x.qty}));return{entries,sum:entries.reduce((a,x)=>a+x.qty,0),r:Math.min(...entries.map(x=>rank[x.code]))}});
+  groups.sort((a,b)=>b.sum-a.sum||a.r-b.r);
+  const warnings=[],faceSplits=[];
+  const cnt={};groups.forEach(g=>g.entries.forEach(e=>cnt[e.code]=(cnt[e.code]||0)+1));
+  const palSplit=new Set(Object.keys(cnt).filter(c=>cnt[c]>1));
+  const pallets=groups.map((g,p)=>{
+    const {towers,faceSplit}=buildPallet(g.entries,rank,palSplit);if(faceSplit)faceSplits.push({code:faceSplit,p});
+    const pc=towers.map((t,k)=>({stack:t.stack,fill:t.fill,p,pos:k}));
+    return{p,cols:pc,total:pc.reduce((a,c)=>a+c.fill,0),seps:pc.reduce((a,c)=>a+Math.max(0,c.stack.length-1),0),mixed:pc.filter(c=>c.stack.length>1).length,h:Math.max(...pc.map(c=>c.fill))};
+  });
+  if(A.reduced)warnings.push(`5층 기준이면 마지막 파레트가 ${A.last}박스(16박스 이하)라 파레트를 ${A.B5}장 → ${pallets.length}장으로 줄였습니다. 최대 ${Math.max(...pallets.map(p=>p.h))}층, 넘치는 박스는 뒷면부터 올립니다.`);
+  skus.forEach(sk=>{if(sk.qty>CAP)return;const ps=pallets.filter(p=>p.cols.some(c=>c.stack.some(x=>x.code===sk.code))).map(p=>p.p+1);
+    if(ps.length>1)warnings.push(`<strong>${sk.code}</strong> ${esc(sk.name)}: 파레트 수를 줄이려고 파레트 ${ps.join('·')}에 나눠 담았습니다.`)});
+  faceSplits.forEach(f=>warnings.push(`<strong>${f.code}</strong> ${esc(byCode[f.code].name)}: 파레트 ${f.p+1}에서 앞면·뒷면에 걸쳐 있습니다.`));
+  return{pallets,skus,byCode,total,warnings};
+}
+
+/* ---------- 직접 배치: 자동 배치에서 시작해 박스 2개를 골라 위치 교체 ---------- */
+let autoCache={sig:'',r:null};
+function sig(){return JSON.stringify(items.map(i=>[(i.name||'').trim(),Math.max(0,Math.floor(+i.qty||0))]))}
+function autoResult(){const sg=sig();if(autoCache.sig!==sg)autoCache={sig:sg,r:compute(items)};return autoCache.r}
+function planFrom(r){return{sig:sig(),p:r.pallets.map(p=>p.cols.map(c=>{const a=[];c.stack.forEach(x=>{for(let k=0;k<x.qty;k++)a.push(x.code)});return a}))}}
+function computeDirect(){
+  const base=autoResult();
+  if(!plan||plan.sig!==sig()){plan=planFrom(base);hist=[];sel=null}
+  const pallets=plan.p.map((cols,p)=>{
+    const pc=cols.map((arr,pos)=>{const stack=[];arr.forEach(code=>{const t=stack[stack.length-1];if(t&&t.code===code)t.qty++;else stack.push({code,qty:1})});return{stack,fill:arr.length,p,pos}});
+    return{p,cols:pc,total:pc.reduce((a,c)=>a+c.fill,0),seps:pc.reduce((a,c)=>a+Math.max(0,c.stack.length-1),0),mixed:pc.filter(c=>c.stack.length>1).length,h:Math.max(...pc.map(c=>c.fill))};
+  });
+  const warnings=[];
+  base.skus.forEach(sk=>{
+    const ps=pallets.filter(p=>p.cols.some(c=>c.stack.some(x=>x.code===sk.code)));
+    if(sk.qty<=CAP&&ps.length>1)warnings.push(`<strong>${sk.code}</strong> ${esc(sk.name)}: 파레트 ${ps.map(p=>p.p+1).join('·')}에 나뉘어 있습니다.`);
+    ps.forEach(p=>{
+      const seq=[];p.cols.forEach(c=>c.stack.forEach(x=>seq.push(x.code)));
+      if(seq.filter(c=>c===sk.code).length>1)warnings.push(`<strong>${sk.code}</strong> ${esc(sk.name)}: 파레트 ${p.p+1}에서 다른 품목 사이에 끊겨 있습니다 (쌓는 도중 다른 품목이 끼어듦).`);
+      const fr=p.cols.slice(0,2).some(c=>c.stack.some(x=>x.code===sk.code)),bk=p.cols.slice(2).some(c=>c.stack.some(x=>x.code===sk.code));
+      if(fr&&bk)warnings.push(`<strong>${sk.code}</strong> ${esc(sk.name)}: 파레트 ${p.p+1}에서 앞면·뒷면에 걸쳐 있습니다.`);
+    });
+  });
+  return{pallets,skus:base.skus,byCode:base.byCode,total:base.total,warnings,direct:true};
+}
+function boxName(pal,tower,level){const c=plan.p[pal][tower][level];return c?result.byCode[c].name:''}
+function renderManual(){
+  const on=mode==='manual';
+  $('#manualPanel').hidden=!on;$('#swapBtn').hidden=!on;
+  $('#modeAuto').setAttribute('aria-selected',String(!on));$('#modeManual').setAttribute('aria-selected',String(on));
+  if(!on)swapOn=false;
+  $('#swapBtn').setAttribute('aria-pressed',String(swapOn));$('#mSwap2').setAttribute('aria-pressed',String(swapOn));
+  $('#mSwap2').textContent=swapOn?'이동·교체 끄기':'이동·교체 켜기';
+  if(controls)controls.enabled=!swapOn;
+  $('#view').style.cursor=swapOn?'grab':'';
+  $('#hint').textContent=swapOn?'박스를 끌어서 다른 박스 위에 놓으면 교체, 빈 칸(점선)에 놓으면 그 자리로 이동':'드래그: 회전 · 휠/핀치: 확대 · 우클릭/두 손가락: 이동';
+  if(!on)return;
+  $('#swapCount').textContent=hist.length?`수정 ${hist.length}회`:'자동 배치 그대로';
+  $('#cursorMsg').innerHTML=!swapOn?'자동 배치 결과에서 시작합니다. 3D 화면 오른쪽 위 <b>이동·교체</b>를 켜면 화면이 고정되고, 박스를 끌어서 옮길 수 있습니다.'
+    :'<b>이동·교체 켜짐</b> · 화면 고정. 박스를 끌어 <b>다른 박스</b>에 놓으면 교체, <b>빈 칸</b>에 놓으면 그 자리로 이동합니다. 놓기 전에 점선으로 위치를 보여줍니다. 뒤쪽은 <b>뒷면</b> 보기로 돌려서 작업하세요.';
+  $('#mUndo').disabled=!hist.length;$('#mReset').disabled=!hist.length;
+}
+function toggleSwap(){if(mode!=='manual')return;swapOn=!swapOn;endDrag();renderManual()}
+$('#swapBtn').addEventListener('click',toggleSwap);
+$('#mSwap2').addEventListener('click',toggleSwap);
+$('#modeAuto').addEventListener('click',()=>{mode='auto';endDrag();recompute()});
+$('#modeManual').addEventListener('click',()=>{mode='manual';recompute()});
+$('#mUndo').addEventListener('click',()=>{const h=hist.pop();if(!h)return;plan.p=JSON.parse(h);recompute()});
+let resetArm=false;
+$('#mReset').addEventListener('click',e=>{
+  if(!resetArm){resetArm=true;e.target.textContent='한 번 더 누르면 되돌림';setTimeout(()=>{resetArm=false;e.target.textContent='자동 배치로 되돌리기'},2500);return}
+  resetArm=false;e.target.textContent='자동 배치로 되돌리기';plan=planFrom(autoResult());hist=[];recompute();
+});
+// 놓을 곳 판정: 박스 → 교체 / 빈 칸 → 이동
+function dropInfo(src,tg){
+  if(!tg)return null;
+  if(tg.box){
+    if(tg.pal===src.pal&&tg.tower===src.tower&&tg.level===src.level)return null;
+    const a=plan.p[src.pal][src.tower][src.level],b=plan.p[tg.pal][tg.tower][tg.level];
+    if(a===b)return{ok:false,text:'같은 품목이라 바꿀 필요가 없습니다'};
+    return{ok:true,kind:'swap',text:`교체: ${result.byCode[a].name} ↔ ${result.byCode[b].name}`};
+  }
+  const col=plan.p[tg.pal][tg.tower];
+  if(tg.pal===src.pal&&tg.tower===src.tower&&src.level===col.length-1)return{ok:false,text:'제자리입니다'};
+  if(col.length>=MAXL)return{ok:false,text:`${MAXL}층을 넘을 수 없습니다`};
+  const tot=plan.p[tg.pal].reduce((a,c)=>a+c.length,0);
+  if(tg.pal!==src.pal&&tot+1>CAPMAX)return{ok:false,text:`파레트당 ${CAPMAX}박스를 넘을 수 없습니다`};
+  const lv=tg.pal===src.pal&&tg.tower===src.tower?col.length:col.length+1;
+  return{ok:true,kind:'move',text:`빈 칸에 놓기: 파레트 ${tg.pal+1} · ${POSNUM[tg.tower]} ${lv}단`};
+}
+function applyDrop(src,tg){
+  const info=dropInfo(src,tg);if(!info||!info.ok)return;
+  hist.push(JSON.stringify(plan.p));
+  if(info.kind==='swap'){const A=plan.p[src.pal][src.tower],B=plan.p[tg.pal][tg.tower];[A[src.level],B[tg.level]]=[B[tg.level],A[src.level]]}
+  else{const code=plan.p[src.pal][src.tower].splice(src.level,1)[0];plan.p[tg.pal][tg.tower].push(code)}
+  recompute();
+}
+
+/* ---------- 입력 ---------- */
+function calcText(q){q=Math.floor(+q||0);if(q<=0)return'';const f=Math.floor(q/5),r=q%5;return f?(r?`${f}+${r}단`:`${f}탑`):`잔량 ${r}`}
+function renderRows(){
+  const box=$('#rows');box.innerHTML='';
+  if(!items.length){box.innerHTML='<div class="empty-state">품목이 없습니다. “+ 품목 추가” 또는 엑셀 붙여넣기로 시작하세요.</div>'}
+  items.forEach((it,i)=>{
+    const row=document.createElement('div');row.className='row';
+    row.innerHTML=`<span class="code" style="--c:${color(i)}">${LET[i]}</span>
+      <input id="name-${i}" type="text" placeholder="품목명" value="${esc(it.name)}" aria-label="${LET[i]} 품목명">
+      <input id="qty-${i}" class="qty" type="number" min="0" step="1" inputmode="numeric" placeholder="0" value="${it.qty?esc(it.qty):''}" aria-label="${LET[i]} 박스 수량">
+      <span class="calc" id="calc-${i}">${calcText(it.qty)}</span>
+      <button class="del" aria-label="${LET[i]} 삭제">×</button>`;
+    row.querySelector(`#name-${i}`).addEventListener('input',e=>{items[i].name=e.target.value;schedule()});
+    row.querySelector(`#qty-${i}`).addEventListener('input',e=>{items[i].qty=Math.max(0,parseInt(e.target.value,10)||0);row.querySelector(`#calc-${i}`).textContent=calcText(items[i].qty);schedule()});
+    row.querySelector('.del').addEventListener('click',()=>{items.splice(i,1);renderRows();recompute()});
+    box.appendChild(row);
+  });
+  $('#addRow').disabled=items.length>=26;
+}
+function schedule(){save();clearTimeout(timer);timer=setTimeout(recompute,220)}
+$('#addRow').addEventListener('click',()=>{if(items.length>=26)return;items.push({name:'',qty:0});renderRows();save();const n=$(`#name-${items.length-1}`);n&&n.focus()});
+$('#loadSample').addEventListener('click',()=>{items=SAMPLE.map(([name,qty])=>({name,qty}));renderRows();recompute()});
+let clearArm=false;
+$('#clearAll').addEventListener('click',e=>{
+  if(!clearArm){clearArm=true;e.target.textContent='한 번 더 누르면 삭제';setTimeout(()=>{clearArm=false;e.target.textContent='전체 지우기'},2500);return}
+  clearArm=false;e.target.textContent='전체 지우기';items=[];renderRows();recompute();
+});
+function parsePaste(t){
+  return t.split(/\r?\n/).map(l=>l.trim()).filter(Boolean).map(l=>{
+    let parts=l.split('\t').map(x=>x.trim()).filter(x=>x!=='');
+    if(parts.length<2){const m=l.match(/^(.*?)[\s,]+([\d,]+)\s*(박스|box|ea)?$/i);if(!m)return null;parts=[m[1],m[2]]}
+    let qi=-1;for(let k=parts.length-1;k>=0;k--){if(/^[\d,]+(\s*(박스|box|ea))?$/i.test(parts[k])){qi=k;break}}
+    if(qi<0)return null;
+    const qty=parseInt(parts[qi].replace(/[^\d]/g,''),10);
+    const name=parts.filter((_,k)=>k!==qi&&!/^[\d,.]+$/.test(_)).join(' ').trim();
+    return name&&qty>0?{name,qty}:null;
+  }).filter(Boolean);
+}
+$('#applyPaste').addEventListener('click',()=>{
+  const r=parsePaste($('#pasteBox').value);
+  if(!r.length){$('#pasteMsg').textContent='읽을 수 있는 행이 없습니다. 품목명과 수량이 한 줄에 있는지 확인하세요.';return}
+  items=r.slice(0,26);renderRows();recompute();
+  $('#pasteMsg').textContent=`${items.length}개 품목을 불러왔습니다.`+(r.length>26?' (26개 초과분 제외)':'');
+});
+
+/* ---------- 출력 ---------- */
+function recompute(){
+  save();
+  result=mode==='manual'?computeDirect():autoResult();
+  save();
+  const P=result.pallets.length;
+  if(active!=='all'&&active>=P)active='all';
+  if(focus&&!result.byCode[focus])focus=null;
+  $('#count').textContent=result.skus.length?`${result.skus.length}품목 · ${result.total}박스`:'';
+  renderManual();renderStats();renderWarn();renderTabs();renderLegend();renderSheet();build3d();
+}
+function renderStats(){
+  const r=result,P=r.pallets.length;
+  const mixed=r.pallets.reduce((a,p)=>a+p.mixed,0),seps=r.pallets.reduce((a,p)=>a+p.seps,0);
+  $('#stats').innerHTML=`
+   <div class="stat hl"><div class="k">파레트</div><div class="v">${P}<small>장</small></div></div>
+   <div class="stat"><div class="k">총 박스</div><div class="v">${r.total}<small>박스</small></div></div>
+   <div class="stat"><div class="k">혼적 탑</div><div class="v">${mixed}<small>개</small></div></div>
+   <div class="stat"><div class="k">간지</div><div class="v">${seps}<small>장</small></div></div>`;
+}
+function renderWarn(){
+  const w=result.warnings,el=$('#warn');
+  if(!w.length){el.hidden=true;return}
+  el.hidden=false;el.innerHTML=`<strong>확인 필요</strong><ul>${w.map(x=>`<li>${x}</li>`).join('')}</ul>`;
+}
+function renderTabs(){
+  const t=$('#tabs'),P=result.pallets.length;t.innerHTML='';
+  if(!P){t.innerHTML='<span class="tab" aria-selected="true">파레트 없음</span>';return}
+  const mk=(key,html)=>{const b=document.createElement('button');b.className='tab';b.setAttribute('role','tab');b.setAttribute('aria-selected',String(active===key));b.innerHTML=html;
+    b.addEventListener('click',()=>{active=key;renderTabs();renderLegend();renderSheet();build3d()});t.appendChild(b)};
+  mk('all',`전체 보기<span class="mono">${P}장</span>`);
+  result.pallets.forEach((p,i)=>mk(i,`파레트 ${i+1}<span class="mono">${p.total}박스</span>`));
+}
+function viewPallets(){if(!result.pallets.length)return[];return active==='all'?result.pallets:[result.pallets[active]]}
+function renderLegend(){
+  const el=$('#legend');el.innerHTML='';
+  const codes=new Set();viewPallets().forEach(p=>p.cols.forEach(c=>c.stack.forEach(s=>codes.add(s.code))));
+  result.skus.filter(s=>codes.has(s.code)).forEach(s=>{
+    const b=document.createElement('button');b.className='chip';b.setAttribute('aria-pressed',String(focus===s.code));
+    b.title='이 품목만 강조';
+    b.innerHTML=`<span class="code" style="--c:${s.color}">${s.code}</span><span class="nm">${esc(s.name)}</span>`;
+    b.addEventListener('click',()=>{focus=focus===s.code?null:s.code;renderLegend();applyFocus()});
+    el.appendChild(b);
+  });
+  if(focus){const c=document.createElement('button');c.className='clear';c.textContent='강조 해제';c.addEventListener('click',()=>{focus=null;renderLegend();applyFocus()});el.appendChild(c)}
+}
+function chip(code,q){const s=result.byCode[code];return `<span class="chip"><span class="code" style="--c:${s.color}">${code}</span><span class="nm">${esc(s.name)}</span><span class="q">×${q}</span></span>`}
+function towerHTML(c,H){
+  let h='';
+  c.stack.forEach((sg,si)=>{const it=result.byCode[sg.code];
+    h+=`<div class="sg${si>0?' gj':''}${sg.qty===1?' q1':''}" style="background-color:${it.color};height:${sg.qty*24+(sg.qty-1)*2}px" title="${esc(it.name)} ${sg.qty}박스"><span class="sn">${esc(it.name)}</span><span class="sq">×${sg.qty}</span></div>`});
+  for(let k=c.fill;k<H;k++)h+='<div class="bx e"></div>';
+  return `<div class="tw">${h}</div>`;
+}
+function renderSheet(){
+  const el=$('#sheet');
+  if(!result.pallets.length){el.innerHTML=`<div class="empty-state">품목명과 박스 수량을 입력하면 적재 지시서가 만들어집니다.</div>`;return}
+  const P=result.pallets.length;
+  el.innerHTML='<div class="pgrid">'+viewPallets().map(p=>{
+    const c=k=>p.cols.find(x=>x.pos===k);
+    const H=Math.max(MAXH,p.h||0);const face=(title,sub,l,r)=>`<div><div class="face-t">${title} <span>${sub}</span></div><div class="towers">${towerHTML(c(l),H)}${towerHTML(c(r),H)}<div class="tlabel">${POSNUM[l]} ${c(l).fill}단</div><div class="tlabel">${POSNUM[r]} ${c(r).fill}단</div><div class="base"></div></div></div>`;
+    const sum={};p.cols.forEach(x=>x.stack.forEach(sg=>sum[sg.code]=(sum[sg.code]||0)+sg.qty));
+    const list=result.skus.filter(s=>sum[s.code]).map(s=>`<span class="chip"><span class="dot" style="--c:${s.color}"></span><span class="nm">${esc(s.name)}</span><span class="q">×${sum[s.code]}</span></span>`).join('');
+    return `<div class="pcard"><h3>파레트 ${p.p+1} / ${P}<span class="mono">${p.total}박스 · ${p.h||0}층 · 간지 ${p.seps}장</span></h3>
+      <div class="faces">${face('앞면','(지게차 쪽)',0,1)}${face('뒷면','(뒤에서 볼 때)',2,3)}</div><div class="pitems">${list}</div></div>`;
+  }).join('')+'</div>';
+}
+function copyText(){
+  const P=result.pallets.length;if(!P)return'';
+  const line=c=>c.fill?c.stack.map(s=>`${s.code} ${result.byCode[s.code].name} ${s.qty}`).join(' ▶간지▶ '):'비움';
+  let t=`[혼적 파레트 적재 지시서] 총 ${result.pallets.reduce((a,p)=>a+p.total,0)}박스 · 파레트 ${P}장\n(탑마다 아래→위 순서)\n`;
+  result.pallets.forEach(p=>{
+    const c=k=>p.cols.find(x=>x.pos===k);
+    t+=`\n■ 파레트 ${p.p+1}/${P} · ${p.total}박스 · 간지 ${p.seps}장\n`;
+    t+=`[앞면] ① ${line(c(0))}\n        ② ${line(c(1))}\n`;
+    t+=`[뒷면] ③ ${line(c(2))}\n        ④ ${line(c(3))}\n`;
+  });
+  return t;
+}
+/* ---------- 지시서 이미지 ---------- */
+function rr(g,x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath()}
+function wrap2(g,t,w){ // 띄어쓰기 기준 최대 2줄
+  if(g.measureText(t).width<=w)return[t];
+  const words=t.split(' ');let a='';
+  for(let i=0;i<words.length;i++){const n=a?a+' '+words[i]:words[i];if(g.measureText(n).width>w&&a){return[a,fitText(g,words.slice(i).join(' '),w)]}a=n}
+  let c='';for(const ch of t){if(g.measureText(c+ch).width>w)break;c+=ch}
+  return[c,fitText(g,t.slice(c.length),w)];
+}
+function fitText(g,t,w){if(g.measureText(t).width<=w)return t;while(t.length&&g.measureText(t+'…').width>w)t=t.slice(0,-1);return t+'…'}
+function sheetCanvas(){
+  const pals=result.pallets,P=pals.length;
+  const FONT='"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif',MONO='"IBM Plex Mono",monospace';
+  const W=1000,PAD=24,GAP=16,COLS=P>1?2:1,CW=(W-PAD*2-GAP*(COLS-1))/COLS;
+  const HM=Math.max(MAXH,...pals.map(p=>p.h||0)),BH=26,BG=2,TH=HM*BH+(HM-1)*BG;
+  const meas=document.createElement('canvas').getContext('2d');
+  // 카드별 품목 목록 줄바꿈 계산
+  const cards=pals.map(p=>{
+    const sum={};p.cols.forEach(x=>x.stack.forEach(sg=>sum[sg.code]=(sum[sg.code]||0)+sg.qty));
+    const its=result.skus.filter(s=>sum[s.code]).map(s=>({s,t:`${s.name} ×${sum[s.code]}`}));
+    meas.font=`500 13px ${FONT}`;
+    const lines=[[]];let lw=0;const maxW=CW-32;
+    its.forEach(x=>{const w=Math.min(maxW,meas.measureText(x.t).width+30);if(lw+w>maxW&&lines[lines.length-1].length){lines.push([]);lw=0}lines[lines.length-1].push({...x,w});lw+=w+6});
+    const h=16+30+20+TH+22+10+lines.length*28+14;
+    return{p,lines,h};
+  });
+  const rows=[];for(let i=0;i<cards.length;i+=COLS)rows.push(cards.slice(i,i+COLS));
+  const HEAD=70,H=HEAD+rows.reduce((a,r)=>a+Math.max(...r.map(c=>c.h))+GAP,0)+PAD-GAP;
+  const sc=2,cv=document.createElement('canvas');cv.width=W*sc;cv.height=H*sc;
+  const g=cv.getContext('2d');g.scale(sc,sc);
+  g.fillStyle='#ffffff';g.fillRect(0,0,W,H);
+  const tot=pals.reduce((a,p)=>a+p.total,0),seps=pals.reduce((a,p)=>a+p.seps,0);
+  const d=new Date(),ds=`${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+  g.fillStyle='#1a2028';g.font=`700 22px ${FONT}`;g.textBaseline='alphabetic';g.fillText('혼적 파레트 적재 지시서',PAD,PAD+20);
+  g.fillStyle='#5b6672';g.font=`500 13px ${FONT}`;g.fillText(`${ds} · 총 ${tot}박스 · 파레트 ${P}장 · 간지 ${seps}장 · 탑마다 아래→위로 적재, 흰 줄 = 간지`,PAD,PAD+42);
+  let y=HEAD;
+  rows.forEach(row=>{
+    const rh=Math.max(...row.map(c=>c.h));
+    row.forEach((cd,ci)=>{
+      const p=cd.p,x=PAD+ci*(CW+GAP);
+      g.fillStyle='#ffffff';g.strokeStyle='#d3d9df';g.lineWidth=1;rr(g,x+.5,y+.5,CW-1,rh-1,8);g.fill();g.stroke();
+      g.fillStyle='#1a2028';g.font=`700 15px ${FONT}`;g.fillText(`파레트 ${p.p+1} / ${P}`,x+16,y+30);
+      g.fillStyle='#5b6672';g.font=`500 12px ${MONO}`;g.textAlign='right';g.fillText(`${p.total}박스 · ${p.h||0}층 · 간지 ${p.seps}장`,x+CW-16,y+30);g.textAlign='left';
+      const FW=(CW-32-16)/2,TW=(FW-4)/2,ty=y+16+30+20;
+      const col=k=>p.cols.find(c=>c.pos===k);
+      [['앞면','(지게차 쪽)',0,1],['뒷면','(뒤에서 볼 때)',2,3]].forEach(([t1,t2,l,r],fi)=>{
+        const fx=x+16+fi*(FW+16);
+        g.font=`700 12px ${FONT}`;const w1=g.measureText(t1+' ').width;g.font=`400 12px ${FONT}`;const w2=g.measureText(t2).width;
+        let sx=fx+(FW-w1-w2)/2;g.fillStyle='#1a2028';g.font=`700 12px ${FONT}`;g.fillText(t1,sx,ty-6);g.fillStyle='#5b6672';g.font=`400 12px ${FONT}`;g.fillText(t2,sx+w1,ty-6);
+        [l,r].forEach((k,ti)=>{
+          const c=col(k),tx=fx+ti*(TW+4);let by=ty+TH;
+          c.stack.forEach((sg,si)=>{
+            const it=result.byCode[sg.code],h=sg.qty*BH+(sg.qty-1)*BG,top=by-h;
+            g.fillStyle=it.color;rr(g,tx,top,TW,h,3);g.fill();
+            g.strokeStyle='rgba(0,0,0,.25)';g.lineWidth=2;for(let n=1;n<sg.qty;n++){const ly=by-n*(BH+BG)+1;g.beginPath();g.moveTo(tx,ly);g.lineTo(tx+TW,ly);g.stroke()}
+            if(si>0){g.fillStyle='#ffffff';g.fillRect(tx,by-5,TW,5);g.fillStyle='rgba(0,0,0,.45)';g.fillRect(tx,by-6,TW,1)}
+            g.fillStyle='#ffffff';g.textAlign='center';g.shadowColor='rgba(0,0,0,.4)';g.shadowBlur=2;
+            if(sg.qty>1){
+              g.font=`700 12px ${FONT}`;const ls=wrap2(g,it.name,TW-8),y0=top+h/2-(ls.length-1)*8-3;
+              ls.forEach((l,i)=>g.fillText(l,tx+TW/2,y0+i*16));
+              g.font=`600 11px ${MONO}`;g.fillText(`×${sg.qty}`,tx+TW/2,y0+(ls.length-1)*16+15);
+            }else{g.font=`700 11px ${FONT}`;g.fillText(fitText(g,`${it.name} ×1`,TW-6),tx+TW/2,top+h/2+4)}
+            g.shadowBlur=0;g.textAlign='left';
+            by=top-BG;
+          });
+          for(let k2=c.fill;k2<HM;k2++){const top=by-BH;g.strokeStyle='#d3d9df';g.lineWidth=1;g.setLineDash([4,3]);rr(g,tx+.5,top+.5,TW-1,BH-1,3);g.stroke();g.setLineDash([]);by=top-BG}
+          g.fillStyle='#5b6672';g.font=`500 12px ${MONO}`;g.textAlign='center';g.fillText(`${POSNUM[k]} ${c.fill}단`,tx+TW/2,ty+TH+16);g.textAlign='left';
+        });
+        g.fillStyle='#c39a66';rr(g,fx,ty+TH+22,FW,7,2);g.fill();
+      });
+      let ly=ty+TH+22+10+8;
+      cd.lines.forEach(line=>{let lx=x+16;line.forEach(it=>{
+        g.fillStyle='#f6f7f9';g.strokeStyle='#d3d9df';rr(g,lx+.5,ly+.5,it.w-1,23,11.5);g.fill();g.stroke();
+        g.fillStyle=it.s.color;g.beginPath();g.arc(lx+12,ly+12,5,0,Math.PI*2);g.fill();
+        g.fillStyle='#1a2028';g.font=`500 13px ${FONT}`;g.fillText(fitText(g,it.t,it.w-30),lx+22,ly+16);lx+=it.w+6});ly+=28});
+    });
+    y+=rh+GAP;
+  });
+  return cv;
+}
+$('#copyBtn').addEventListener('click',async()=>{
+  if(!result.pallets.length)return;
+  const msg=$('#copyMsg');msg.textContent='이미지 만드는 중…';
+  try{if(document.fonts&&document.fonts.ready)await document.fonts.ready}catch(e){}
+  const cv=sheetCanvas();
+  const blobP=new Promise(res=>cv.toBlob(res,'image/png'));
+  const fallback=()=>{$('#shotImg').src=cv.toDataURL('image/png');$('#shot').hidden=false;msg.textContent='';$('#shotClose').focus()};
+  try{
+    if(!navigator.clipboard||!window.ClipboardItem)throw new Error('no');
+    await navigator.clipboard.write([new ClipboardItem({'image/png':blobP})]);
+    msg.textContent='이미지를 클립보드에 복사했습니다. 카톡이나 메신저에 붙여넣으세요.';
+  }catch(e){fallback()}
+});
+$('#shotClose').addEventListener('click',()=>{$('#shot').hidden=true});
+$('#shot').addEventListener('click',e=>{if(e.target.id==='shot')$('#shot').hidden=true});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')$('#shot').hidden=true});
+
+/* ---------- 3D ---------- */
+const BH=0.56, PH=0.26, SEP=0.016;
+let renderer,scene,camera,controls,world,floorMat,glOK=false,ray,hlGeo,hlMat,hlEdge,hlMesh=null,tgMesh=null,slotGeo,slotMat,dashOk,dashBad,fillOk,fillBad;
+const matCache={},edgeCache={},texReady={v:false};
+let boxGeo,edgeGeo,sepGeo,sepMat,sepEdge,woodMat,woodDark;
+function cssVar(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim()}
+function init3d(){
+  const wrap=$('#view');
+  try{
+    if(typeof THREE==='undefined'||!THREE.OrbitControls)throw new Error('lib');
+    renderer=new THREE.WebGLRenderer({antialias:true});
+  }catch(e){wrap.innerHTML='<div class="nogl">3D 화면을 불러오지 못했습니다. 아래 적재 지시서는 그대로 사용할 수 있습니다.</div>';return}
+  glOK=true;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+  renderer.outputEncoding=THREE.sRGBEncoding;
+  wrap.appendChild(renderer.domElement);
+  scene=new THREE.Scene();
+  camera=new THREE.PerspectiveCamera(35,1,0.1,200);
+  controls=new THREE.OrbitControls(camera,renderer.domElement);
+  controls.enableDamping=true;controls.dampingFactor=0.12;controls.minDistance=2.5;controls.maxDistance=60;controls.maxPolarAngle=Math.PI*0.495;controls.autoRotateSpeed=1.6;
+  scene.add(new THREE.HemisphereLight(0xffffff,0x8a8f96,0.85));
+  const d=new THREE.DirectionalLight(0xffffff,0.55);d.position.set(4,9,6);scene.add(d);
+  const d2=new THREE.DirectionalLight(0xffffff,0.2);d2.position.set(-6,4,-5);scene.add(d2);
+  floorMat=new THREE.MeshBasicMaterial({color:0xcccccc});
+  const fl=new THREE.Mesh(new THREE.CircleGeometry(40,64),floorMat);fl.rotation.x=-Math.PI/2;fl.position.y=-0.002;scene.add(fl);
+  boxGeo=new THREE.BoxGeometry(0.965,BH-0.014,0.965);
+  edgeGeo=new THREE.EdgesGeometry(boxGeo);
+  sepGeo=new THREE.BoxGeometry(0.99,SEP,0.99);
+  sepMat=new THREE.MeshLambertMaterial({color:0xffffff});
+  sepEdge=new THREE.LineBasicMaterial({color:0x1a2028,transparent:true,opacity:0.6});
+  woodMat=new THREE.MeshLambertMaterial({color:new THREE.Color('#c39a66').convertSRGBToLinear()});
+  woodDark=new THREE.MeshLambertMaterial({color:new THREE.Color('#9c7546').convertSRGBToLinear()});
+  ray=new THREE.Raycaster();
+  hlGeo=new THREE.BoxGeometry(1.01,BH+0.01,1.01);
+  hlMat=new THREE.MeshBasicMaterial({color:0xf0b400,transparent:true,opacity:0.45,depthTest:false});
+  hlEdge=new THREE.LineBasicMaterial({color:0xf0b400,depthTest:false});
+  slotGeo=new THREE.BoxGeometry(0.965,BH-0.014,0.965);slotMat=new THREE.MeshBasicMaterial({colorWrite:false,depthWrite:false});
+  dashOk=new THREE.LineDashedMaterial({color:0x1a8f4a,dashSize:0.07,gapSize:0.05,depthTest:false});dashBad=new THREE.LineDashedMaterial({color:0xd0402a,dashSize:0.07,gapSize:0.05,depthTest:false});
+  fillOk=new THREE.MeshBasicMaterial({color:0x2fbf6a,transparent:true,opacity:0.22,depthTest:false,depthWrite:false});fillBad=new THREE.MeshBasicMaterial({color:0xd0402a,transparent:true,opacity:0.18,depthTest:false,depthWrite:false});
+  const cv=renderer.domElement;
+  const castAt=e=>{const rc=cv.getBoundingClientRect();ray.setFromCamera(new THREE.Vector2((e.clientX-rc.left)/rc.width*2-1,-(e.clientY-rc.top)/rc.height*2+1),camera)};
+  cv.addEventListener('pointerdown',e=>{
+    if(!swapOn||mode!=='manual'||!world)return;
+    castAt(e);const boxes=[];world.traverse(o=>{if(o.userData.box&&o.visible)boxes.push(o)});
+    const hit=ray.intersectObjects(boxes,false)[0];if(!hit)return;
+    const u=hit.object.userData;drag={src:{pal:u.pal,tower:u.tower,level:u.level},tg:null};
+    sel=drag.src;markSel();cv.setPointerCapture&&cv.setPointerCapture(e.pointerId);$('#view').style.cursor='grabbing';
+  });
+  cv.addEventListener('pointermove',e=>{
+    if(!drag)return;castAt(e);
+    // 박스와 빈 칸(보이지 않는 칸)을 함께 검사해서 가장 가까운 것을 고름 → 앞쪽 빈 칸이 뒤쪽 높은 탑보다 먼저 잡힘
+    const objs=[];world.traverse(o=>{const u=o.userData;if((u.box&&o.visible&&!(u.pal===drag.src.pal&&u.tower===drag.src.tower&&u.level===drag.src.level))||u.slot)objs.push(o)});
+    const hit=ray.intersectObjects(objs,false)[0];
+    const tg=hit?{...hit.object.userData}:null;drag.tg=tg;
+    const info=dropInfo(drag.src,tg);
+    showTarget(hit&&info?hit.object:null,info);
+    const tip=$('#dragTip'),rc=$('#view').getBoundingClientRect();
+    if(info){tip.hidden=false;tip.textContent=info.text;tip.classList.toggle('bad',!info.ok);tip.style.left=(e.clientX-rc.left)+'px';tip.style.top=(e.clientY-rc.top)+'px'}else tip.hidden=true;
+  });
+  const finish=()=>{if(!drag)return;const d=drag;endDrag();applyDrop(d.src,d.tg)};
+  cv.addEventListener('pointerup',finish);
+  cv.addEventListener('pointercancel',()=>endDrag());
+  applyTheme();
+  const ro=new ResizeObserver(resize);ro.observe(wrap);resize();
+  (function loop(){requestAnimationFrame(loop);controls.update();renderer.render(scene,camera)})();
+}
+function resize(){if(!glOK)return;const w=$('#view').clientWidth,h=$('#view').clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}
+function applyTheme(){
+  if(!glOK)return;
+  scene.background=new THREE.Color(cssVar('--scene')||'#e2e6ea').convertSRGBToLinear();
+  floorMat.color=new THREE.Color(cssVar('--floor')||'#d3d9df').convertSRGBToLinear();
+  build3d();
+}
+function wrapText(g,text,maxW,maxLines){
+  const out=[];let line='';
+  for(const ch of text){const t=line+ch;if(g.measureText(t).width>maxW&&line){out.push(line);line=ch.trimStart();if(out.length===maxLines)break}else line=t}
+  if(out.length<maxLines&&line)out.push(line);
+  if(out.length===maxLines&&out.join('').length<text.length){let l=out[maxLines-1];while(g.measureText(l+'…').width>maxW&&l.length)l=l.slice(0,-1);out[maxLines-1]=l+'…'}
+  return out;
+}
+function makeTex(s,kind){
+  const c=document.createElement('canvas');
+  const W=512,H=kind==='top'?512:Math.round(512*BH);
+  c.width=W;c.height=H;const g=c.getContext('2d');
+  g.fillStyle=s.color;g.fillRect(0,0,W,H);
+  g.fillStyle='rgba(0,0,0,.10)';g.fillRect(0,H*0.46,W,H*0.08); // 테이프 라인
+  g.strokeStyle='rgba(0,0,0,.28)';g.lineWidth=10;g.strokeRect(5,5,W-10,H-10);
+  g.fillStyle='#fff';g.strokeStyle='rgba(0,0,0,.35)';g.textBaseline='middle';g.lineJoin='round';
+  if(kind==='top'){
+    g.font='600 260px "IBM Plex Mono", monospace';g.textAlign='center';g.lineWidth=14;g.strokeText(s.code,W/2,H/2+8);g.fillText(s.code,W/2,H/2+8);
+  }else{
+    g.font='600 170px "IBM Plex Mono", monospace';g.textAlign='left';g.lineWidth=12;g.strokeText(s.code,34,H/2+6);g.fillText(s.code,34,H/2+6);
+    g.font='700 40px "IBM Plex Sans KR", sans-serif';g.lineWidth=7;
+    const lines=wrapText(g,s.name,W-200,2);const y0=H/2-(lines.length-1)*24;
+    lines.forEach((l,k)=>{g.strokeText(l,180,y0+k*48);g.fillText(l,180,y0+k*48)});
+  }
+  const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;t.anisotropy=4;return t;
+}
+function matsFor(s){
+  if(matCache[s.code]&&matCache[s.code].key===s.name+s.color+texReady.v)return matCache[s.code].m;
+  const side=makeTex(s,'side'),top=makeTex(s,'top');
+  const plain=new THREE.Color(s.color).convertSRGBToLinear();
+  const mk=o=>new THREE.MeshLambertMaterial(o);
+  const sm=mk({map:side});
+  const m=[sm,sm,mk({map:top}),mk({color:plain}),sm,sm];
+  matCache[s.code]={key:s.name+s.color+texReady.v,m};
+  edgeCache[s.code]=new THREE.LineBasicMaterial({color:0x000000,transparent:true,opacity:0.35});
+  return m;
+}
+function floorLabel(text){
+  const c=document.createElement('canvas');c.width=1024;c.height=200;const g=c.getContext('2d');
+  g.fillStyle=cssVar('--accent')||'#f0b400';g.fillRect(0,40,1024,120);
+  g.fillStyle=cssVar('--accent-ink')||'#1a2028';g.font='700 70px "IBM Plex Sans KR", sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillText(text,512,102);
+  const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(2,0.39),new THREE.MeshBasicMaterial({map:t,transparent:true}));
+  m.rotation.x=-Math.PI/2;return m;
+}
+function palletMesh(){
+  const g=new THREE.Group();
+  const add=(w,h,d,x,y,z,mat)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);g.add(m)};
+  [-0.88,0,0.88].forEach(z=>add(2,0.035,0.24,0,0.0175,z,woodDark));
+  [-0.88,0,0.88].forEach(z=>[-0.88,0,0.88].forEach(x=>add(0.2,0.17,0.2,x,0.035+0.085,z,woodDark)));
+  [-0.88,0,0.88].forEach(x=>add(0.2,0.025,2,x,0.2175,0,woodMat));
+  for(let k=0;k<7;k++)add(2,0.03,0.22,0,PH-0.015,-0.89+k*0.2967,woodMat);
+  return g;
+}
+function build3d(){
+  if(!glOK||!result)return;
+  if(world){scene.remove(world);world.traverse(o=>{if(o.geometry&&o.geometry!==boxGeo&&o.geometry!==edgeGeo&&o.geometry!==sepGeo)o.geometry.dispose()})}
+  world=new THREE.Group();scene.add(world);
+  const list=viewPallets(),n=list.length,gap=2.9;let seq=0;
+  list.forEach((p,i)=>{
+    const ox=(i-(n-1)/2)*gap;
+    const g=new THREE.Group();g.position.x=ox;
+    g.add(palletMesh());
+    const lab=floorLabel(n>1?`파레트 ${p.p+1} · ▲ 앞면`:'▲ 앞면 (지게차 진입)');lab.position.set(0,0.003,1.38);g.add(lab);
+    p.cols.forEach(col=>{
+      const x=GEO[col.pos][0],z=GEO[col.pos][1];
+      let y=PH,level=0;
+      col.stack.forEach((seg,si)=>{
+        const s=result.byCode[seg.code];
+        if(si>0){const sp=new THREE.Mesh(sepGeo,sepMat);sp.position.set(x,y+SEP/2,z);sp.userData={sep:true,below:seq-1};sp.add(new THREE.LineSegments(new THREE.EdgesGeometry(sepGeo),sepEdge));g.add(sp);y+=SEP}
+        const mats=matsFor(s);
+        for(let k=0;k<seg.qty;k++){
+          const m=new THREE.Mesh(boxGeo,mats);m.position.set(x,y+BH/2,z);m.userData={box:true,level,seq:seq++,code:seg.code,tower:col.pos,pal:p.p};
+          m.add(new THREE.LineSegments(edgeGeo,edgeCache[seg.code]));g.add(m);y+=BH;level++;
+        }
+      });
+      if(mode==='manual'&&col.fill<MAXL){const sl=new THREE.Mesh(slotGeo,slotMat);sl.position.set(x,y+SEP+BH/2,z);sl.userData={slot:true,pal:p.p,tower:col.pos,level:col.fill};g.add(sl)}
+    });
+    world.add(g);
+  });
+  nBoxes=seq;stopPlay();layer=nBoxes;const sl=$('#layer');sl.max=String(nBoxes);sl.value=String(layer);
+  applyLayer();applyFocus();markSel();
+  const vk=active+'|'+n;if(vk!==lastViewKey){lastViewKey=vk;setView(view,true)}
+}
+function showTarget(obj,info){
+  if(tgMesh&&tgMesh.parent)tgMesh.parent.remove(tgMesh);tgMesh=null;
+  if(!obj||!info)return;
+  tgMesh=new THREE.Mesh(hlGeo,info.ok?fillOk:fillBad);tgMesh.renderOrder=11;
+  const ln=new THREE.LineSegments(new THREE.EdgesGeometry(hlGeo),info.ok?dashOk:dashBad);ln.computeLineDistances();ln.renderOrder=12;tgMesh.add(ln);
+  obj.add(tgMesh);
+}
+function endDrag(){drag=null;sel=null;if(glOK){showTarget(null);markSel()}const t=document.getElementById('dragTip');if(t)t.hidden=true;if(swapOn)$('#view').style.cursor='grab'}
+function markSel(){
+  if(!glOK)return;
+  if(hlMesh&&hlMesh.parent)hlMesh.parent.remove(hlMesh);hlMesh=null;
+  if(!sel||!world)return;
+  let target=null;world.traverse(o=>{const u=o.userData;if(u.box&&u.pal===sel.pal&&u.tower===sel.tower&&u.level===sel.level)target=o});
+  if(!target)return;
+  hlMesh=new THREE.Mesh(hlGeo,hlMat);hlMesh.renderOrder=10;hlMesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(hlGeo),hlEdge));target.add(hlMesh);
+}
+function applyLayer(){
+  if(!world)return;
+  let last=null;
+  world.traverse(o=>{if(o.userData.box){o.visible=o.userData.seq<layer;if(o.userData.seq===layer-1)last=o.userData}else if(o.userData.sep)o.visible=o.userData.below<layer});
+  const lv=$('#layerVal');
+  if(!nBoxes){lv.textContent='';return}
+  if(layer>=nBoxes){lv.textContent=`${nBoxes} / ${nBoxes}박스 · 적재 완료`;return}
+  if(!last){lv.textContent=`0 / ${nBoxes}박스`;return}
+  const s=result.byCode[last.code];
+  lv.textContent=`${layer} / ${nBoxes}박스 · ${active==='all'?'파레트 '+(last.pal+1)+' ':''}${POSNUM[last.tower]} ${last.tower+1}번 탑 ${last.level+1}단 · ${s.code} ${s.name}`;
+}
+function applyFocus(){
+  Object.keys(matCache).forEach(code=>{
+    const dim=focus&&focus!==code;
+    matCache[code].m.forEach(m=>{m.transparent=!!dim;m.opacity=dim?0.12:1;m.depthWrite=!dim;m.needsUpdate=true});
+    if(edgeCache[code])edgeCache[code].opacity=dim?0.05:0.35;
+  });
+}
+const VIEWS={back:[0,0.25,-1],iso:[1,0.78,1.25],front:[0,0.25,1],side:[1,0.25,0],top:[0,1,0.0001]};
+function setView(v,keep){
+  if(!glOK)return;view=v;
+  document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===v)));
+  const n=Math.max(1,viewPallets().length),span=n*2+(n-1)*0.9;
+  const r=Math.max(7.2,span*1.45);const d=VIEWS[v],L=Math.hypot(d[0],d[1],d[2]);
+  controls.target.set(0,v==='top'?0:1.45,0);
+  camera.position.set(d[0]/L*r,(v==='top'?0:1.45)+d[1]/L*r,d[2]/L*r);
+  controls.update();
+}
+document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
+$('#spin').addEventListener('click',e=>{if(!glOK)return;controls.autoRotate=!controls.autoRotate;e.currentTarget.setAttribute('aria-pressed',String(controls.autoRotate))});
+function setLayer(v){layer=v;$('#layer').value=v;applyLayer()}
+$('#layer').addEventListener('input',e=>{stopPlay();setLayer(+e.target.value)});
+function stopPlay(){if(playT){clearInterval(playT);playT=null;$('#play').textContent='적재 순서 재생'}}
+$('#play').addEventListener('click',()=>{
+  if(playT){stopPlay();return}
+  let v=0;setLayer(v);$('#play').textContent='정지';
+  playT=setInterval(()=>{v++;if(v>nBoxes){stopPlay();return}setLayer(v)},380);
+});
+
+/* ---------- 시작 ---------- */
+const mq=window.matchMedia('(prefers-color-scheme: dark)');
+(mq.addEventListener?mq.addEventListener('change',applyTheme):mq.addListener(applyTheme));
+new MutationObserver(applyTheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+renderRows();
+init3d();
+recompute();
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>{texReady.v=true;build3d()});
+})();
+</script>
+
+</body>
+</html>
