@@ -230,6 +230,7 @@ button.chip[aria-pressed="true"]{border-color:var(--ink);font-weight:700}
         <li>②-1 혼적 파레트는 맨 마지막 파레트로 둡니다.</li>
         <li>③ 앞면 ①→②→③→④, 뒷면 ⑤→⑥→⑦→⑧ 순서로 쌓고, 한 품목을 쌓기 시작하면 다 쌓을 때까지 다른 품목을 쌓지 않습니다.</li>
         <li>④ 한 면(4줄)에 들어가는 품목은 앞면 또는 뒷면 한쪽에만 둡니다.</li>
+        <li>④-0 혼적 파레트는 빈칸 없이 ①→②→…→⑧ 순번대로 꽉 채웁니다. 수량이 많은 품목부터 쌓고, 한 탑이 차면 다음 탑으로 이어갑니다.</li>
         <li>④-1 탑 8개는 높이를 평균으로 맞추고(차이 1층 이내) 빈칸 없이 이어서 쌓습니다. 품목을 구분하려고 칸을 비우지 않고, 이 경우 품목이 앞뒤에 걸칠 수 있습니다.</li>
         <li>⑤ 면 안에서는 한 탑을 채우고, 잔여는 옆 탑 맨 아래에 깐 뒤 다른 품목을 올립니다. 품목이 바뀌는 곳마다 간지를 넣습니다.</li>
         <li>⑥ 층은 아래부터 채우고 맨 위층만 공백을 허용합니다.</li>
@@ -484,6 +485,11 @@ function evenCaps(F,n){const b=Math.floor(F/n),r=F%n;return Array.from({length:n
 // 파레트 1장: 앞면(탑 4) / 뒷면(탑 4) 나누기 → 면 안에서 순서대로 쌓기
 function buildPallet8(entries,rank,palSplit){
   const N=entries.reduce((a,e)=>a+e.qty,0),H=Math.ceil(N/NT),FMAX=4*H,k=entries.length;
+  // 혼적 파레트: 빈칸 없이 ①→②→…→⑧ 순번대로 꽉 채움 (수량 많은 품목부터, 탑 높이는 평균, 차이 1층 이내)
+  if(k>1){
+    const order=[...entries].sort((a,b)=>rank[a.code]-rank[b.code]);
+    return{towers:fillTowers(order,evenCaps(N,NT)).towers,faceSplit:null};
+  }
   const frontRank=c=>c.front.reduce((a,x)=>a+rank[x.code]*x.qty,0)/Math.max(1,c.front.reduce((a,x)=>a+x.qty,0));
   let best=null;
   for(let F=Math.max(0,N-FMAX);F<=Math.min(FMAX,N);F++){
