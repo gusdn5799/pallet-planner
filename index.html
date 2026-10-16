@@ -45,6 +45,11 @@ button.ghost{background:transparent}
 button:disabled{opacity:.45;cursor:not-allowed}
 h1,h2,h3{margin:0;text-wrap:balance}
 
+.kind{display:inline-flex;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:4px;gap:4px}
+.kind a{padding:8px 22px;border-radius:7px;font-weight:700;font-size:15px;color:var(--muted);text-decoration:none}
+.kind a:hover{color:var(--ink)}
+.kind a[aria-current="page"]{background:var(--ink);color:var(--panel)}
+.kind a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .top{max-width:1400px;margin:0 auto 18px;display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
 .brand{display:flex;align-items:center;gap:12px}
 .mark{width:34px;height:34px;flex:none;border-radius:4px;background:
@@ -196,6 +201,7 @@ button.chip[aria-pressed="true"]{border-color:var(--ink);font-weight:700}
       <p class="spec"><b>1100×1100</b> 파레트 · 바닥 <b>2×2</b> · 권장 <b>5층</b>(20박스) · 최대 <b>7층</b>(28박스)</p>
     </div>
   </div>
+  <nav class="kind" aria-label="품목 구분"><a href="./" aria-current="page">계육</a><a href="egg.html">계란</a></nav>
 </header>
 
 <main class="app">
