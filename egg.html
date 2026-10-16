@@ -231,7 +231,7 @@ button.chip[aria-pressed="true"]{border-color:var(--ink);font-weight:700}
         <li>③ 앞면 ①→②→③→④, 뒷면 ⑤→⑥→⑦→⑧ 순서로 쌓고, 한 품목을 쌓기 시작하면 다 쌓을 때까지 다른 품목을 쌓지 않습니다.</li>
         <li>④ 한 면(4줄)에 들어가는 품목은 앞면 또는 뒷면 한쪽에만 둡니다.</li>
         <li>④-0 혼적 파레트는 빈칸 없이 ①→②→…→⑧ 순번대로 꽉 채웁니다.</li>
-        <li>④-00 쌓는 순번은 무조건 A→B→C→D 알파벳 순서입니다. 한 탑에 두 품목이 들어가면(자투리) 후순번 품목이 위로 올라갑니다.</li>
+        <li>④-00 쌓는 순번은 무조건 A→B→C→D 알파벳 순서입니다. 각 품목은 탑 하나를 통째로 채울 수 있는 만큼 먼저 단독 탑으로 쌓고, 남은 자투리는 뒤쪽 탑에 모아 A→B→C→D 순으로 쌓습니다. 그래서 앞 순번 자투리가 아래, 후순번 자투리가 위로 올라갑니다.</li>
         <li>④-1 탑 8개는 높이를 평균으로 맞추고(차이 1층 이내) 빈칸 없이 이어서 쌓습니다. 품목을 구분하려고 칸을 비우지 않고, 이 경우 품목이 앞뒤에 걸칠 수 있습니다.</li>
         <li>⑤ 면 안에서는 한 탑을 채우고, 잔여는 옆 탑 맨 아래에 깐 뒤 다른 품목을 올립니다. 품목이 바뀌는 곳마다 간지를 넣습니다.</li>
         <li>⑥ 층은 아래부터 채우고 맨 위층만 공백을 허용합니다.</li>
@@ -489,7 +489,26 @@ function buildPallet8(entries,rank,palSplit){
   // 혼적 파레트: 빈칸 없이 ①→②→…→⑧ 순번대로 꽉 채움 (A→B→C→D 순, 탑 높이는 평균, 차이 1층 이내)
   if(k>1){
     const order=[...entries].sort((a,b)=>rank[a.code]-rank[b.code]);
-    return{towers:fillTowers(order,evenCaps(N,NT)).towers,faceSplit:null};
+    // 탑 높이는 평균(낮은 층 lo / 높은 층 hi, 높은 탑 개수는 고정). 어느 탑을 높게 할지는 혼적 탑이 가장 적어지는 배치를 고름
+    const lo=Math.floor(N/NT),r=N%NT,hi=lo+1;
+    const sim=caps=>{
+      const towers=caps.map(c=>({cap:c,stack:[],fill:0}));let ti=0;const rem=[];
+      // 1) A→B→C→D 순으로, 한 품목이 탑 하나를 통째로 채울 수 있으면 단독 탑으로 쌓음
+      order.forEach(e=>{let q=e.qty;while(ti<NT&&caps[ti]>0&&q>=caps[ti]){towers[ti].stack.push({code:e.code,qty:caps[ti]});towers[ti].fill=caps[ti];q-=caps[ti];ti++}if(q)rem.push({code:e.code,qty:q})});
+      // 2) 남은 자투리는 뒤쪽 탑에 A→B→C→D 순으로 이어 쌓음 → 앞 순번 자투리가 아래, 후순번 자투리가 위
+      rem.forEach(e=>{let q=e.qty;while(q>0&&ti<NT){const t=towers[ti],take=Math.min(q,t.cap-t.fill);if(take>0){const top=t.stack[t.stack.length-1];if(top&&top.code===e.code)top.qty+=take;else t.stack.push({code:e.code,qty:take});t.fill+=take;q-=take}if(t.fill>=t.cap)ti++}});
+      const mixed=towers.filter(t=>t.stack.length>1).length,pieces=towers.reduce((a,t)=>a+t.stack.length,0);
+      const tallPos=caps.reduce((a,c,i)=>a+(c===hi&&r?i:0),0);
+      // 알파벳 순서 어긋남: 탑 맨 아래 품목 순서가 뒤집힌 횟수
+      const bot=towers.filter(t=>t.stack.length).map(t=>rank[t.stack[0].code]);let inv=0;for(let i=0;i<bot.length;i++)for(let j=i+1;j<bot.length;j++)if(bot[i]>bot[j])inv++;
+      return{towers,sc:mixed*1000+inv*100+pieces*10+tallPos*0.01};
+    };
+    let best=null;
+    const pick=(start,left,cur)=>{if(!left){const caps=Array.from({length:NT},(_,i)=>cur.includes(i)?hi:lo);const x=sim(caps);if(!best||x.sc<best.sc)best=x;return}
+      for(let i=start;i<=NT-left;i++){cur.push(i);pick(i+1,left-1,cur);cur.pop()}};
+    pick(0,r,[]);
+    const towers=best.towers;
+    return{towers,faceSplit:null};
   }
   const frontRank=c=>c.front.reduce((a,x)=>a+rank[x.code]*x.qty,0)/Math.max(1,c.front.reduce((a,x)=>a+x.qty,0));
   let best=null;
