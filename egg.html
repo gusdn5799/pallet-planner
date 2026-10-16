@@ -1186,7 +1186,7 @@ $('#gifBtn').addEventListener('click',async()=>{
   // 전체 파레트 + 적재 완료 상태로
   if(active!=='all'){active='all';renderTabs();renderLegend();renderSheet();build3d()}
   setLayer(nBoxes);setView('iso');
-  const W=720,H=440,FR=48,DELAY=70;
+  const W=720,H=440,FR=72,DELAY=80;  // 한 바퀴 약 5.8초
   const tgt=controls.target.clone(),off=camera.position.clone().sub(tgt);
   // 어느 방향에서 봐도 전체 파레트가 화면에 들어오도록 거리를 넉넉히
   const n=Math.max(1,viewPallets().length),span=n*2+(n-1)*0.9,ext=Math.hypot(span/2,1.2);
