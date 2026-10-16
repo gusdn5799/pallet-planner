@@ -172,7 +172,9 @@ button.chip[aria-pressed="true"]{border-color:var(--ink);font-weight:700}
 .shot-box p{margin:0;font-size:13px}
 .shot-img{overflow:auto;min-height:0;border:1px solid var(--line);border-radius:6px}
 .shot-img img{display:block;max-width:100%;height:auto}
-.shot-foot{display:flex;justify-content:flex-end}
+.shot-foot{display:flex;justify-content:flex-end;align-items:center}
+.gifsave{background:var(--accent);color:var(--accent-ink);font-weight:700;border-radius:6px;padding:7px 14px;text-decoration:none}
+#gifBtn{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
 .bx.e{background:transparent;border:1px dashed var(--line)}
 .tlabel{text-align:center;font-family:var(--f-mono);font-size:12px;color:var(--muted);margin-top:4px}
 .base{grid-column:1/-1;height:7px;border-radius:2px;background:#c39a66;margin-top:2px}
@@ -268,6 +270,7 @@ button.chip[aria-pressed="true"]{border-color:var(--ink);font-weight:700}
           <button data-view="top" aria-pressed="false">위</button>
           <button id="swapBtn" aria-pressed="false" hidden>이동·교체</button>
           <button id="spin" aria-pressed="false">자동 회전</button>
+          <button id="gifBtn">360° GIF 만들기</button>
         </div>
         <div class="hint" id="hint">드래그: 회전 · 휠/핀치: 확대 · 우클릭/두 손가락: 이동</div>
         <div class="dragtip" id="dragTip" hidden></div>
@@ -299,6 +302,13 @@ button.chip[aria-pressed="true"]{border-color:var(--ink);font-weight:700}
         <div class="gs-row"><span></span><div style="display:flex;gap:6px;flex-wrap:wrap"><button id="gsSave">저장</button><button id="gsClear" class="ghost">지우기</button></div></div>
       </details>
       <div id="sheet"></div>
+      <div class="shot" id="gifBox" hidden>
+        <div class="shot-box" role="dialog" aria-label="360도 GIF">
+          <p id="gifMsg"><b>360° GIF</b></p>
+          <div class="shot-img"><img id="gifImg" alt="전체 파레트 360도 회전 GIF"></div>
+          <div class="shot-foot" style="gap:8px"><a id="gifSave" class="gifsave" download="계란_파레트_360.gif">GIF 저장</a><button id="gifClose">닫기</button></div>
+        </div>
+      </div>
       <div class="shot" id="shot" hidden>
         <div class="shot-box" role="dialog" aria-label="지시서 이미지">
           <p><b>자동 복사가 막혀 있어 이미지를 띄웠습니다.</b> 이미지를 우클릭(폰은 길게 누르기) → “이미지 복사”로 복사하세요.</p>
@@ -312,6 +322,9 @@ button.chip[aria-pressed="true"]{border-color:var(--ink);font-weight:700}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>window.exports={};</script>
+<script src="https://cdn.jsdelivr.net/npm/gifenc@1.0.3/dist/gifenc.js"></script>
+<script>window.GIFENC=window.exports;window.exports=undefined;</script>
 <script>
 (function(){
 const $=s=>document.querySelector(s);
@@ -953,7 +966,7 @@ $('#copyBtn').addEventListener('click',async()=>{
 });
 $('#shotClose').addEventListener('click',()=>{$('#shot').hidden=true});
 $('#shot').addEventListener('click',e=>{if(e.target.id==='shot')$('#shot').hidden=true});
-document.addEventListener('keydown',e=>{if(e.key==='Escape')$('#shot').hidden=true});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('#shot').hidden=true;$('#gifBox').hidden=true}});
 
 /* ---------- 3D ---------- */
 const BH=0.56, PH=0.26, SEP=0.016;
@@ -1162,6 +1175,54 @@ function setView(v,keep){
 }
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
 $('#spin').addEventListener('click',e=>{if(!glOK)return;controls.autoRotate=!controls.autoRotate;e.currentTarget.setAttribute('aria-pressed',String(controls.autoRotate))});
+/* ---------- 360° GIF (전체 파레트 한 바퀴) ---------- */
+let gifBusy=false;
+$('#gifBtn').addEventListener('click',async()=>{
+  if(gifBusy||!glOK||!result.pallets.length)return;
+  const G=window.GIFENC;
+  if(!G||!G.GIFEncoder){alert0('GIF 도구를 불러오지 못했습니다. 인터넷 연결을 확인하고 새로고침하세요.');return}
+  gifBusy=true;const btn=$('#gifBtn'),label=btn.textContent;btn.disabled=true;
+  const wasRot=controls.autoRotate;controls.autoRotate=false;stopPlay();
+  // 전체 파레트 + 적재 완료 상태로
+  if(active!=='all'){active='all';renderTabs();renderLegend();renderSheet();build3d()}
+  setLayer(nBoxes);setView('iso');
+  const W=720,H=440,FR=48,DELAY=70;
+  const tgt=controls.target.clone(),off=camera.position.clone().sub(tgt);
+  // 어느 방향에서 봐도 전체 파레트가 화면에 들어오도록 거리를 넉넉히
+  const n=Math.max(1,viewPallets().length),span=n*2+(n-1)*0.9,ext=Math.hypot(span/2,1.2);
+  const dist=Math.max(ext*3.1,Math.hypot(off.x,off.y,off.z)*1.25),el=Math.atan2(off.y,Math.hypot(off.x,off.z));
+  const rad=dist*Math.cos(el),yy=dist*Math.sin(el),a0=Math.atan2(off.x,off.z);
+  const prevPR=renderer.getPixelRatio(),prevAsp=camera.aspect;
+  renderer.setPixelRatio(1);renderer.setSize(W,H,false);camera.aspect=W/H;camera.updateProjectionMatrix();
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;const g2=cv.getContext('2d',{willReadFrequently:true});
+  const enc=G.GIFEncoder();
+  try{
+    for(let i=0;i<FR;i++){
+      const a=a0+i/FR*Math.PI*2;
+      camera.position.set(tgt.x+Math.sin(a)*rad,tgt.y+yy,tgt.z+Math.cos(a)*rad);camera.lookAt(tgt);
+      renderer.render(scene,camera);g2.drawImage(renderer.domElement,0,0,W,H);
+      const data=g2.getImageData(0,0,W,H).data;
+      const pal=G.quantize(data,256),idx=G.applyPalette(data,pal);
+      enc.writeFrame(idx,W,H,{palette:pal,delay:DELAY,repeat:0});
+      btn.textContent=`GIF 만드는 중 ${Math.round((i+1)/FR*100)}%`;
+      await new Promise(r=>setTimeout(r,0));
+    }
+    enc.finish();
+    const blob=new Blob([enc.bytes()],{type:'image/gif'}),url=URL.createObjectURL(blob);
+    $('#gifImg').src=url;$('#gifSave').href=url;
+    const d=new Date(),ds=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+    $('#gifSave').download=`계란_파레트_360_${ds}.gif`;
+    $('#gifMsg').innerHTML=`<b>전체 파레트 360° GIF</b> · ${(blob.size/1024/1024).toFixed(1)}MB · <b>GIF 저장</b>을 누르거나, 이미지를 우클릭(폰은 길게 누르기)해서 저장하세요.`;
+    $('#gifBox').hidden=false;$('#gifClose').focus();
+  }catch(e){alert0('GIF를 만들지 못했습니다: '+e.message)}
+  finally{
+    renderer.setPixelRatio(prevPR);camera.aspect=prevAsp;resize();setView('iso');
+    controls.autoRotate=wasRot;btn.textContent=label;btn.disabled=false;gifBusy=false;
+  }
+});
+function alert0(m){$('#copyMsg').textContent=m}
+$('#gifClose').addEventListener('click',()=>{$('#gifBox').hidden=true});
+$('#gifBox').addEventListener('click',e=>{if(e.target.id==='gifBox')$('#gifBox').hidden=true});
 function setLayer(v){layer=v;$('#layer').value=v;applyLayer()}
 $('#layer').addEventListener('input',e=>{stopPlay();setLayer(+e.target.value)});
 function stopPlay(){if(playT){clearInterval(playT);playT=null;$('#play').textContent='적재 순서 재생'}}
